@@ -1,0 +1,43 @@
+node_modules
+dist
+dist-ssr
+*.local
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Data
+data/
+public/data/binary/
+*.bin
+*.geojson
+*.csv
+*.sqlite
+
+# Artifacts & Screenshots
+*.png
+*.jpg
+*.jpeg
+*.gif
+mapping_data.json
+mapping_report.md
+
+# Debug & Temporary scripts
+check_*.js
+verify_*.js
+debug_*.cjs
+simulate_click.js
+analyze_*.js
+analyze_*.cjs
+test_*.js
+refactor.cjs
+dev_webgpu/
+geojson_viewer/
+temp/
+/tmp/

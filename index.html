@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGL World Map</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://d3js.org/d3-geo-projection.v4.min.js"></script>
+    <script src="https://unpkg.com/regl/dist/regl.js"></script>
+    <script src="https://unpkg.com/earcut@2.2.4/dist/earcut.min.js"></script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            margin: 0;
+            background: #000000;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+        }
+
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        #text-layer {
+            pointer-events: none;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 24px;
+            z-index: 10;
+        }
+
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 20;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 8px;
+            color: white;
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            padding: 8px 12px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        button:hover {
+            background: #555;
+        }
+
+        /* Settings Icon */
+        #settings-trigger {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 54px;
+            height: 54px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 0;
+            border-radius: 50%;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #settings-trigger svg {
+            width: 32px;
+            height: 32px;
+        }
+
+        #settings-trigger:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: rotate(45deg);
+        }
+
+        /* Sidebar Styling */
+        #settings-sidebar {
+            position: fixed;
+            top: 0;
+            left: -350px;
+            width: 350px;
+            height: 100vh;
+            background: rgba(15, 15, 15, 0.95);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            z-index: 1001;
+            transition: left 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 10px 0 40px rgba(0, 0, 0, 0.8);
+        }
+
+        #settings-sidebar.active {
+            left: 0;
+        }
+
+        .sidebar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .sidebar-header h2 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 500;
+        }
+
+        .close-sidebar {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 28px;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+        }
+
+        .close-sidebar:hover {
+            color: white;
+        }
+
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+        }
+
+        /* Custom scrollbar */
+        .sidebar-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .sidebar-content::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        .sidebar-content::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+
+        .sidebar-content::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Accordion */
+        .accordion {
+            margin-bottom: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .accordion-header {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 16px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            user-select: none;
+            transition: background 0.2s;
+        }
+
+        .accordion-header:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .accordion-header::after {
+            font-size: 18px;
+            transition: transform 0.3s;
+        }
+
+        .accordion-header.active::after {
+            content: '-';
+            transform: rotate(180deg);
+        }
+
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .accordion-inner {
+            padding: 16px;
+        }
+
+        .projection-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .proj-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 8px;
+            font-size: 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .proj-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .proj-btn.active {
+            background: rgba(0, 120, 212, 0.4);
+            border-color: #0078d4;
+            font-weight: bold;
+        }
+
+        /* Inputs */
+        .setting-group {
+            margin-bottom: 16px;
+        }
+
+        .setting-group label {
+            display: block;
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .setting-row label:first-child {
+            margin-bottom: 0;
+            flex: 1;
+            font-size: 13px;
+            color: #ddd;
+        }
+
+        .setting-row input[type="color"] {
+            width: 32px;
+            height: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: none;
+            cursor: pointer;
+            padding: 0;
+            border-radius: 4px;
+        }
+
+        .setting-row input[type="range"] {
+            flex: 1;
+            margin: 0 10px;
+            cursor: pointer;
+            accent-color: #0078d4;
+        }
+
+        .range-value {
+            font-family: monospace;
+            font-size: 11px;
+            color: #0078d4;
+            min-width: 25px;
+            text-align: right;
+        }
+
+        .setting-row input[type="number"] {
+            width: 45px;
+            background: rgba(30, 30, 30, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 4px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .setting-group select {
+            width: 100%;
+            background: rgba(30, 30, 30, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 8px;
+            border-radius: 8px;
+            outline: none;
+            cursor: pointer;
+            color-scheme: dark;
+        }
+
+        .setting-group select option {
+            background-color: #1a1a1a;
+            color: white;
+        }
+
+        .setting-group select:focus {
+            border-color: #0078d4;
+        }
+
+        /* Toggle Switch iOS Style */
+        .toggle-row {
+            margin-bottom: 16px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 46px !important;
+            height: 24px !important;
+            flex: 0 0 46px !important;
+            min-width: 46px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+            display: none;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.2);
+            transition: 0.3s;
+            border-radius: 24px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: #ffffff !important;
+            transition: 0.3s;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+        }
+
+        .toggle-switch input:checked+.toggle-slider {
+            background-color: #0A84FF !important;
+        }
+
+        .toggle-switch input:checked+.toggle-slider:before {
+            transform: translateX(22px);
+        }
+
+        .dependent-group {
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, opacity 0.3s ease-out, padding 0.3s ease;
+            max-height: 500px;
+            /* arbitrary large enough */
+            opacity: 1;
+        }
+
+        .dependent-group.hidden-group {
+            max-height: 0;
+            opacity: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            margin: 0;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Morphing Map Controls Container */
+        #map-overlays {
+            position: absolute;
+            bottom: 24px;
+            left: 24px;
+            width: 56px;
+            height: 56px;
+            background: rgba(0, 0, 0, 0.5);
+            /* #000 with 0.5 opacity */
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 28px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            pointer-events: auto;
+            backdrop-filter: blur(10px);
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
+
+            /* Morphing Transition */
+            transition: all 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6);
+            padding: 0;
+        }
+
+        #map-overlays.is-open {
+            width: 180px;
+            /* Much narrower as requested */
+            height: 380px;
+            /* Slightly more to accommodate buttons */
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #ffffff;
+            /* Close to white as requested */
+            border-radius: 20px;
+            padding: 24px 16px 74px 16px;
+            /* More bottom padding for toggle button */
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+        }
+
+        /* The Morphing Toggle Button - Locked at the bottom */
+        #overlay-toggle {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 56px;
+            height: 56px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6);
+            z-index: 1001;
+        }
+
+        /* Keep toggle at the bottom when open */
+        #map-overlays.is-open #overlay-toggle {
+            bottom: 6px;
+            left: 6px;
+            width: 48px;
+            height: 48px;
+        }
+
+        /* Icon Lines for Morphing (Menu -> Cross) */
+        .toggle-icon {
+            position: relative;
+            width: 28px;
+            /* Slightly larger base */
+            height: 20px;
+            transition: all 0.6s;
+        }
+
+        .toggle-icon span {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            /* Thicker for better visibility */
+            background: #ffffff;
+            border-radius: 2px;
+            transition: all 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6);
+        }
+
+        .toggle-icon span:nth-child(1) {
+            top: 0;
+        }
+
+        .toggle-icon span:nth-child(2) {
+            top: 8px;
+        }
+
+        .toggle-icon span:nth-child(3) {
+            top: 16px;
+        }
+
+        /* Cross Transformation - Clean & Symmetric */
+        #map-overlays.is-open .toggle-icon span:nth-child(1) {
+            top: 50%;
+            transform: translateY(-50%) rotate(45deg);
+        }
+
+        #map-overlays.is-open .toggle-icon span:nth-child(2) {
+            opacity: 0;
+        }
+
+        #map-overlays.is-open .toggle-icon span:nth-child(3) {
+            top: 50%;
+            transform: translateY(-50%) rotate(-45deg);
+        }
+
+        /* Content Visibility */
+        .overlay-section {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.4s ease;
+            pointer-events: none;
+        }
+
+        #map-overlays.is-open .overlay-section {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+            transition-delay: 0.3s;
+            /* Wait for expansion */
+        }
+
+        .overlay-section {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .overlay-title {
+            color: #fff;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 2px;
+            padding-left: 4px;
+        }
+
+        .overlay-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: flex-start;
+        }
+
+        .svg-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            transition: all 0.2s ease;
+            outline: none;
+            width: 100%;
+        }
+
+        .svg-btn svg {
+            width: 44px;
+            height: 44px;
+            transition: all 0.2s ease;
+        }
+
+        .svg-btn span {
+            font-size: 13px;
+            font-weight: 400;
+            letter-spacing: 1px;
+            transition: all 0.2s ease;
+        }
+
+        .svg-btn:hover {
+            color: #fff;
+            background: transparent;
+            border: 1px solid #fff;
+        }
+
+        .svg-btn.active {
+            color: #fff;
+            background: transparent;
+            border: 1px solid #fff;
+        }
+
+        /* Satellite Variants Selector */
+        #satellite-selector {
+            position: absolute;
+            bottom: 24px;
+            right: 24px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background: rgba(15, 15, 15, 0.7);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 12px;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        #satellite-selector.hidden {
+            opacity: 0;
+            pointer-events: none;
+            transform: translateX(30px);
+        }
+
+        .selector-label {
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 9px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 6px;
+            text-align: center;
+        }
+
+        .variant-btns {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .variant-btn {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.6);
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            text-align: left;
+            min-width: 100px;
+        }
+
+        .variant-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .variant-btn.active {
+            background: rgba(255, 255, 255, 0.9);
+            color: #000;
+            border-color: #fff;
+            box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
+        }
+
+        .month-btns {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 4px;
+            margin-bottom: 12px;
+        }
+
+        .month-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.4);
+            padding: 4px 0;
+            font-size: 10px;
+            font-weight: 700;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .month-btn:not([disabled]):hover {
+            border-color: rgba(255, 255, 255, 0.4);
+            color: white;
+        }
+
+        .month-btn.active {
+            background: #2196F3;
+            color: white;
+            border-color: #2196F3;
+        }
+
+        .month-btn[disabled] {
+            opacity: 0.2;
+            cursor: not-allowed;
+        }
+
+        #fps-counter {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2000;
+            background: rgba(0, 0, 0, 0.9);
+            color: #00ff00;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 48px;
+            font-weight: 900;
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            pointer-events: none;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="fps-counter" class="hidden">00</div>
+    <div id="loading">Loading World Map Data (0%)...</div>
+
+    <button id="settings-trigger" title="Paramètres de la carte">
+        <svg fill="currentColor" width="24" height="24" viewBox="0 0 24 24">
+            <path
+                d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.81,11.69,4.81,12c0,0.31,0.02,0.65,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z" />
+        </svg>
+    </button>
+
+    <!-- Settings Sidebar -->
+    <div id="settings-sidebar">
+        <div class="sidebar-header">
+            <h2>Paramètres</h2>
+            <button class="close-sidebar">&times;</button>
+        </div>
+
+        <div class="sidebar-content">
+            <!-- Accordion: Général -->
+            <div class="accordion">
+                <div class="accordion-header">Général</div>
+                <div class="accordion-content">
+                    <div class="accordion-inner">
+                        <div class="setting-group">
+                            <label>Fond de page</label>
+                            <input type="color" data-key="pageBackgroundColor">
+                        </div>
+                        <div class="setting-row">
+                            <label>Océan / Arrière-plan map</label>
+                            <input type="color" data-key="mapBackgroundColor">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Accordion: Graticules -->
+            <div class="accordion">
+                <div class="accordion-header">Graticules</div>
+                <div class="accordion-content">
+                    <div class="accordion-inner">
+                        <div class="setting-row toggle-row">
+                            <label style="color: white; font-weight: 500;">Afficher graticules</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" data-key="graticulesEnabled">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="dependent-group" data-depends="graticulesEnabled">
+                            <div class="setting-row">
+                                <label>Couleur</label>
+                                <input type="color" data-key="gratColor">
+                            </div>
+                            <div class="setting-row">
+                                <label>Opacité</label>
+                                <input type="range" data-key="gratOpacity" min="0" max="1" step="0.1">
+                                <span class="range-value" id="val-gratOpacity">1.0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Accordion: Apparence Pays & Frontières -->
+            <div class="accordion">
+                <div class="accordion-header">Apparence Pays</div>
+                <div class="accordion-content">
+                    <div class="accordion-inner">
+                        <div class="setting-row">
+                            <label>Couleur de base</label>
+                            <input type="color" data-key="baseColor">
+                        </div>
+                        <div class="setting-row">
+                            <label>Couleur Frontières</label>
+                            <input type="color" data-key="borderColor">
+                        </div>
+                        <div class="setting-row">
+                            <label>Opacité Frontières</label>
+                            <input type="range" data-key="borderOpacity" min="0" max="1" step="0.05">
+                            <span class="range-value" id="val-borderOpacity">0.1</span>
+                        </div>
+                        <div class="setting-row">
+                            <label>Épaisseur Frontières</label>
+                            <input type="number" data-key="borderWidth" min="0" step="0.5">
+                        </div>
+                        <div class="setting-row toggle-row">
+                            <label style="color: white; font-weight: 500;">Afficher les frontières</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" data-key="showStrokes" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-row toggle-row">
+                            <label style="color: white; font-weight: 500;">Afficher les noms</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" data-key="showLabels" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-row toggle-row">
+                            <label style="color: white; font-weight: 500;">Afficher le remplissage</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" data-key="showColors" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+            <!-- Accordion: Interactions -->
+            <div class="accordion">
+                <div class="accordion-header">Interactions</div>
+                <div class="accordion-content">
+                    <div class="accordion-inner">
+                        <div class="setting-row">
+                            <label>Couleur Survol</label>
+                            <input type="color" data-key="hoverColor">
+                        </div>
+                        <div class="setting-row">
+                            <label>Opacité Survol</label>
+                            <input type="range" data-key="hoverOpacity" min="0" max="1" step="0.1">
+                            <span class="range-value" id="val-hoverOpacity">0.8</span>
+                        </div>
+                        <div class="setting-row">
+                            <label>Couleur Sélection</label>
+                            <input type="color" data-key="selectionColor">
+                        </div>
+                        <div class="setting-row">
+                            <label>Opacité Sélection</label>
+                            <input type="range" data-key="selectionOpacity" min="0" max="1" step="0.1">
+                            <span class="range-value" id="val-selectionOpacity">0.8</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Accordion: Labels -->
+            <div class="accordion">
+                <div class="accordion-header">Labels</div>
+                <div class="accordion-content">
+                    <div class="accordion-inner">
+                        <div class="setting-row toggle-row">
+                            <label style="color: white; font-weight: 500;">Afficher labels</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" data-key="labelsEnabled">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="dependent-group" data-depends="labelsEnabled">
+                            <div class="setting-row">
+                                <label>Couleur texte</label>
+                                <input type="color" data-key="fontColor">
+                            </div>
+                            <div class="setting-row">
+                                <label>Opacité texte</label>
+                                <input type="range" data-key="fontOpacity" min="0" max="1" step="0.1">
+                                <span class="range-value" id="val-fontOpacity">0.8</span>
+                            </div>
+                            <div class="setting-row">
+                                <label>Couleur halo</label>
+                                <input type="color" data-key="fontOutlineColor">
+                            </div>
+                            <div class="setting-row">
+                                <label>Épaisseur halo</label>
+                                <input type="number" data-key="fontOutlineWidth" min="0" step="1">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Accordion: Diagnostic -->
+            <div class="accordion">
+                <div class="accordion-header">Diagnostic</div>
+                <div class="accordion-content">
+                    <div class="accordion-inner">
+                        <div class="setting-row toggle-row">
+                            <label style="color: white; font-weight: 500;">Afficher les FPS</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" data-key="showFPS">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="map-overlays">
+        <button id="overlay-toggle" title="Réglages de la carte">
+            <div class="toggle-icon">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </button>
+        <div class="overlay-section">
+            <div class="overlay-title">PROJECTIONS</div>
+            <div class="overlay-buttons" id="projection-buttons">
+                <button class="svg-btn active" data-proj="mercator">
+                    <span>Mercator</span>
+                </button>
+                <button class="svg-btn" data-proj="natural-earth-2">
+                    <span>Nat. Earth 2</span>
+                </button>
+                <button class="svg-btn" data-proj="mollweide">
+                    <span>Mollweide</span>
+                </button>
+                <button class="svg-btn" data-proj="robinson">
+                    <span>Robinson</span>
+                </button>
+                <button class="svg-btn" data-proj="winkel3">
+                    <span>Winkel Tripel</span>
+                </button>
+                <button class="svg-btn" data-proj="orthographic">
+                    <span>Globe (3D)</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="webgpu-layer"></canvas>
+    <canvas id="text-layer"></canvas>
+
+
+    <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>

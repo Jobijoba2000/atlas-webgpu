@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Benchmark Chargement Binaire</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #1a1a1a; color: #eee; }
+        .container { max-width: 800px; margin: 0 auto; background: #2a2a2a; padding: 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        button { background: #4CAF50; border: none; color: white; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; margin-bottom: 20px; }
+        button:hover { background: #45a049; }
+        #results { font-family: monospace; line-height: 1.6; }
+        .log-entry { border-bottom: 1px solid #444; padding: 10px 0; }
+        .time { font-weight: bold; color: #4CAF50; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Benchmark de Chargement Isolé</h1>
+        <p>Ce test mesure <strong>uniquement</strong> le téléchargement et la décompression Gzip pour comparer le premier essai ("froid") et les suivants ("chaud").</p>
+        <button id="runBtn">Lancer le Test (5m_mercator.bin)</button>
+        <div id="results"></div>
+    </div>
+
+    <script>
+        async function runBenchmark() {
+            const resultsDiv = document.getElementById('results');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = "Démarrage du test...";
+            resultsDiv.prepend(entry);
+
+            // On utilise exactement le même chemin que la carte
+            const url = "data/binary/5m/countries_5m_mercator.bin";
+            const t0 = performance.now();
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error("Fichier non trouvé à l'adresse : " + url);
+
+                const ds = new DecompressionStream('gzip');
+                const decompressedStream = response.body.pipeThrough(ds);
+                const reader = decompressedStream.getReader();
+                
+                const chunks = [];
+                let totalLen = 0;
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    chunks.push(value);
+                    totalLen += value.length;
+                }
+
+                const t1 = performance.now();
+                const sizeMB = (totalLen / (1024 * 1024)).toFixed(2);
+                
+                entry.innerHTML = `<strong>Test terminé :</strong><br>
+                    - Fichier : 5m_mercator.bin (~${sizeMB} Mo décompressé)<br>
+                    - Temps total : <span class="time">${(t1 - t0).toFixed(2)}ms</span><br>
+                    <small>Si tu relances, ça devrait être beaucoup plus rapide (cache navigateur).</small>`;
+            } catch (err) {
+                entry.innerHTML = `<span style="color: #f44;">Erreur : ${err.message}</span><br>
+                <small>Assure-toi que ce fichier est bien ouvert via http://localhost:3001/test_performance.html</small>`;
+            }
+        }
+
+        document.getElementById('runBtn').onclick = runBenchmark;
+    </script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+{
+  "name": "world-map-webgl-v2",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "postbuild": "node -e \"const fs=require('fs'); fs.cpSync('data', 'dist/data', { recursive: true });\"",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^7.3.1"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "d3": "^7.9.0",
+    "d3-geo-projection": "^4.0.0",
+    "earcut": "^3.0.2",
+    "express": "^5.2.1",
+    "msedge-tts": "^2.0.4",
+    "sharp": "^0.34.5"
+  }
+}
