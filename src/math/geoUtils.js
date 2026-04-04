@@ -78,7 +78,8 @@ export function computeLabelLayout(m, atlas) {
         }
 
         if (bboxHeight !== undefined) {
-            const ratio = Math.abs(bboxHeight / realWidth);
+            // const ratio = Math.abs(bboxHeight / realWidth);
+            const ratio = 1.0; // Désactivé à la demande de l'utilisateur
             finalMultiplier = finalMultiplier * ratio;
         }
     }
