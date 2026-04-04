@@ -146,6 +146,106 @@ export function drawPolygons(pass, items) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 1.5. DRAW POLYGONS FOR PICKING (ID COLOR)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PICK_WGSL = /* wgsl */`
+struct Uniforms {
+    uOpacity      : f32, // Not used for picking
+    _p0           : f32,
+    uTranslate    : vec2f,
+    uScale        : f32,
+    _p1           : f32,
+    uResolution   : vec2f,
+    uRotate       : vec2f,
+    uIsOrtho      : f32,
+    _p2           : f32,
+    uPickColor    : vec3f,
+    _p3           : f32,
+};
+
+@group(0) @binding(0) var<uniform> u : Uniforms;
+
+struct VIn {
+    @location(0) aPos : vec2f,
+};
+struct VOut {
+    @builtin(position) pos : vec4f,
+    @location(0) vZ        : f32,
+};
+
+const PI = 3.14159265358979323846f;
+
+@vertex fn vs(i: VIn) -> VOut {
+    var o: VOut;
+    let center = u.uResolution / 2.0;
+
+    if (u.uIsOrtho > 0.5) {
+        let lon = i.aPos.x * PI/180.0; let lat = i.aPos.y * PI/180.0;
+        let rLon = u.uRotate.x * PI/180.0; let rLat = u.uRotate.y * PI/180.0;
+        let dl = lon - rLon;
+        let xr = cos(lat)*sin(dl);
+        let yr = cos(rLat)*sin(lat) - sin(rLat)*cos(lat)*cos(dl);
+        let zr = sin(rLat)*sin(lat) + cos(rLat)*cos(lat)*cos(dl);
+        let pxO = vec2f(120.0*xr, -120.0*yr) * u.uScale + u.uTranslate + center;
+        var clipO = (pxO / u.uResolution) * 2.0 - 1.0; clipO.y = -clipO.y;
+        o.pos = vec4f(clipO, 0.0, 1.0);
+        o.vZ = zr;
+    } else {
+        let px = i.aPos * u.uScale + u.uTranslate + center;
+        var clip = (px / u.uResolution) * 2.0 - 1.0; clip.y = -clip.y;
+        o.pos = vec4f(clip, 0.0, 1.0);
+        o.vZ = 1.0;
+    }
+    return o;
+}
+
+@fragment fn fs(i: VOut) -> @location(0) vec4f {
+    if (u.uIsOrtho > 0.5 && i.vZ < 0.0) { discard; }
+    return vec4f(u.uPickColor, 1.0);
+}
+`;
+
+let pickPipeline = null;
+let pickBG_Uniforms = null;
+const pickUniformBuf = new Float32Array(16);
+
+function ensurePickPipeline() {
+    if (pickPipeline) return;
+    ensureRingBuffer();
+    const mod = makeShader('pick_poly', PICK_WGSL);
+    const bgl = device.createBindGroupLayout({
+        entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform', hasDynamicOffset: true, minBindingSize: 64 } }],
+    });
+    pickBG_Uniforms = device.createBindGroup({ layout: bgl, entries: [{ binding: 0, resource: { buffer: uniformRingBuffer, size: 64 } }] });
+    pickPipeline = device.createRenderPipeline({
+        layout: device.createPipelineLayout({ bindGroupLayouts: [bgl] }),
+        vertex: { module: mod, entryPoint: 'vs', buffers: [{ arrayStride: 8, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x2' }] }] },
+        fragment: { module: mod, entryPoint: 'fs', targets: [{ format: 'bgra8unorm' }] }, // Unblended format suited for reading pixels
+        primitive: { topology: 'triangle-list' },
+    });
+}
+
+export function drawPickingPolygons(pass, items) {
+    if (!items || items.length === 0) return;
+    ensurePickPipeline();
+    pass.setPipeline(pickPipeline);
+    for (const p of items) {
+        if (!p.pos || p.count <= 0 || !p.uPickColor) continue;
+        pickUniformBuf[2] = p.uTranslate[0]; pickUniformBuf[3] = p.uTranslate[1];
+        pickUniformBuf[4] = p.uScale; 
+        pickUniformBuf[6] = p.uResolution[0]; pickUniformBuf[7] = p.uResolution[1];
+        pickUniformBuf[8] = p.uRotate[0]; pickUniformBuf[9] = p.uRotate[1]; 
+        pickUniformBuf[10] = p.uIsOrtho ? 1.0 : 0.0;
+        pickUniformBuf[12] = p.uPickColor[0]; pickUniformBuf[13] = p.uPickColor[1]; pickUniformBuf[14] = p.uPickColor[2];
+        const dynOffset = allocSlot(pickUniformBuf);
+        pass.setBindGroup(0, pickBG_Uniforms, [dynOffset]);
+        pass.setVertexBuffer(0, p.pos._gpuBuffer);
+        pass.draw(p.count);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 2. DRAW THICK LINES
 // ─────────────────────────────────────────────────────────────────────────────
 

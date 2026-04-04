@@ -23,7 +23,7 @@ async function startApp() {
   const sidebar = new Sidebar();
   const currentProvider = getProvider();
 
-  const redraw = createRenderer({
+  const { redraw, doPicking } = createRenderer({
     getRenderList: () => mapState.renderList,
     getLoadedRegions: () => mapState.loadedRegions,
     getExclusiveFocusMode: () => mapState.exclusiveFocusMode,
@@ -56,7 +56,8 @@ async function startApp() {
 
   setupInteractions({
     updateSize,
-    redraw
+    redraw,
+    doPicking
   });
 
   setRedrawCallback(redraw);

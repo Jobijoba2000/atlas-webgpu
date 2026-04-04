@@ -15,9 +15,23 @@ export function speakText(text) {
     }
 }
 
-export function setupInteractions({ updateSize, redraw }) {
+export function setupInteractions({ updateSize, redraw, doPicking }) {
     window.addEventListener('resize', () => {
         updateSize();
         redraw();
+    });
+
+    webglCanvas.addEventListener('contextmenu', async (e) => {
+        e.preventDefault(); // Empêcher le menu classique du clic droit
+        
+        if (doPicking) {
+            const iso = await doPicking(e.clientX, e.clientY);
+            if (iso) {
+                console.log(`Pays cliqué (clic droit) : ${iso}`);
+                speakText(iso); // Bonus interactif (optionnel)
+                // Tu pourras ajouter ta logique personnalisée ici
+                // appState.set('focusedIso', iso);
+            }
+        }
     });
 }

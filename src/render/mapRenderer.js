@@ -1,8 +1,9 @@
 import { width, height, gpuContext, device } from '../core/gpuContext.js';
 import { zoomState, isOrthographic, orthoRotate } from '../core/camera.js';
-import { drawPolygons, drawThickLines, drawTextFull, drawThickCircle, resetUniformRing } from './shaders.js';
+import { drawPolygons, drawThickLines, drawTextFull, drawThickCircle, resetUniformRing, drawPickingPolygons } from './shaders.js';
 import { buffer as gpuBuffer } from './gpu.js';
 import { appState } from '../state/appState.js';
+import { mapState } from '../state/mapState.js';
 import { parseHexColor, getProjectionTextScale } from '../math/geoUtils.js';
 
 // ─── Circle geometry (globe outline) ─────────────────────────────────────────
@@ -39,6 +40,29 @@ export function createRenderer(deps) {
     let labelHaloColor = parseHexColor(appState.get('fontOutlineColor') || '#000000');
     let labelHaloThick = appState.get('fontOutlineWidth') || 2.0;
 
+    let pickingTexture = null;
+    let pickingReadBuffer = null;
+    let pickingWidth = 0;
+    let pickingHeight = 0;
+
+    function ensurePickingResources() {
+        if (width !== pickingWidth || height !== pickingHeight) {
+            pickingWidth = width;
+            pickingHeight = height;
+            if (pickingTexture) pickingTexture.destroy();
+            pickingTexture = device.createTexture({
+                size: [width, height, 1],
+                format: 'bgra8unorm',
+                usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC
+            });
+            if (pickingReadBuffer) pickingReadBuffer.destroy();
+            pickingReadBuffer = device.createBuffer({
+                size: 4, // 4 bytes pour un pixel (BGRA)
+                usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST
+            });
+        }
+    }
+
     appState.subscribe((_, key, value) => {
         switch (key) {
             case 'gratColor': gratColor = parseHexColor(value); break;
@@ -51,14 +75,15 @@ export function createRenderer(deps) {
         }
     });
 
-    return function redraw() {
-        resetUniformRing();
+    return {
+        redraw: function redraw() {
+            resetUniformRing();
 
-        const uTranslate = [zoomState.x, zoomState.y];
-        const uScale = zoomState.k;
-        const outlineColor = parseHexColor(appState.get('outlineColor'));
-        const dynamicThickness = 1.0 * Math.pow(Math.min(zoomState.k, 2000), 0.256);
-        const gratThickness = 1.2 * Math.pow(Math.min(zoomState.k, 150), 0.23);
+            const uTranslate = [zoomState.x, zoomState.y];
+            const uScale = zoomState.k;
+            const outlineColor = parseHexColor(appState.get('outlineColor'));
+            const dynamicThickness = 1.0 * Math.pow(Math.min(zoomState.k, 2000), 0.256);
+            const gratThickness = 1.2 * Math.pow(Math.min(zoomState.k, 150), 0.23);
 
         const loadedRegions = getLoadedRegions();
         const isAnyLoaded = loadedRegions.size > 0;
@@ -183,5 +208,78 @@ export function createRenderer(deps) {
 
         pass.end();
         device.queue.submit([encoder.finish()]);
+        },
+
+        doPicking: async function doPicking(clientX, clientY) {
+            ensurePickingResources();
+            resetUniformRing();
+
+            const dpr = window.devicePixelRatio || 1;
+            const x = Math.floor(clientX * dpr);
+            const y = Math.floor(clientY * dpr);
+
+            if (x < 0 || y < 0 || x >= pickingWidth || y >= pickingHeight) return null;
+
+            const uTranslate = [zoomState.x, zoomState.y];
+            const uScale = zoomState.k;
+
+            const loadedRegions = getLoadedRegions();
+            const fgTri = [], bgTri = [];
+
+            getRenderList().forEach(item => {
+                if (item.isRegion && !loadedRegions.has(item.parentIso)) return;
+                if (!item.uPickColor) return;
+                const tData = {
+                    pos: item.pos,
+                    count: item.count,
+                    uPickColor: item.uPickColor,
+                    uTranslate, uScale,
+                    uResolution: [width, height],
+                    uRotate: orthoRotate,
+                    uIsOrtho: isOrthographic
+                };
+                if (item.isRegion) fgTri.push(tData); else bgTri.push(tData);
+            });
+
+            const encoder = device.createCommandEncoder({ label: 'picking frame' });
+            
+            // On ne rend que dans un VIEWPORT 1x1 pour économiser les pixels
+            const pass = encoder.beginRenderPass({
+                colorAttachments: [{ view: pickingTexture.createView(), clearValue: { r: 0, g: 0, b: 0, a: 0 }, loadOp: 'clear', storeOp: 'store' }],
+            });
+
+            // Optimisation: utiliser setScissorRect ou juste rendre et copier 1 pixel
+            
+            drawPickingPolygons(pass, bgTri);
+            drawPickingPolygons(pass, fgTri);
+
+            pass.end();
+
+            encoder.copyTextureToBuffer(
+                { texture: pickingTexture, origin: [x, y, 0] },
+                { buffer: pickingReadBuffer, bytesPerRow: 256 },
+                [1, 1, 1]
+            );
+
+            device.queue.submit([encoder.finish()]);
+
+            await pickingReadBuffer.mapAsync(GPUMapMode.READ);
+            const arrayBuffer = pickingReadBuffer.getMappedRange();
+            const pixels = new Uint8Array(arrayBuffer);
+            
+            // bgra8unorm: B, G, R, A
+            const r = pixels[2];
+            const g = pixels[1];
+            const b = pixels[0];
+
+            let foundIso = null;
+            if (r > 0 || g > 0 || b > 0) {
+                const pickId = r + (g << 8) + (b << 16);
+                foundIso = mapState.pickIdToIso.get(pickId);
+            }
+
+            pickingReadBuffer.unmap();
+            return foundIso;
+        }
     };
 }

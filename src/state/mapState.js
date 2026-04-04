@@ -19,4 +19,9 @@ export const mapState = {
 
     // Features globales (utilisé pour rebuildGeometry)
     globalFeatures: [],
+
+    // Mapping pour le picking WebGPU
+    pickIdToIso: new Map(),
+    isoToPickId: new Map(),
+    nextPickId: 1
 };
