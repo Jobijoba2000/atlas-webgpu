@@ -22,6 +22,7 @@ export const defaultConfig = {
     fontOutlineWidth: 2,
 
     // View
+    resolution: '10m',
     projection: 'mercator',
     showStrokes: true,
     showLabels: true,

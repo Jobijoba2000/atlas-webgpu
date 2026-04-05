@@ -4,7 +4,7 @@ import { isOrthographic } from './core/camera.js';
 export const NATURAL_EARTH_PROVIDER = {
     id: 'natural_earth',
     async loadData(onProgress) {
-        const res = '10m';
+        const res = appState.get('resolution') || '10m';
         const projId = isOrthographic ? 'lonlat' : appState.get('projection');
 
         if (!this._fetchAndDecode) {

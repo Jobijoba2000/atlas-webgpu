@@ -32,12 +32,21 @@ export class Sidebar {
             input.addEventListener('change', (e) => this.handleInputChange(e.target));
         });
 
-        // Projection and Quality Buttons logic - Moved outside sidebar to bottom-left
+        // Projection logic
         const projBtns = document.querySelectorAll('.svg-btn[data-proj]');
         projBtns.forEach(btn => {
             btn.addEventListener('click', () => {
                 const proj = btn.dataset.proj;
                 appState.set('projection', proj);
+            });
+        });
+
+        // Resolution logic
+        const resBtns = document.querySelectorAll('.res-btn[data-res]');
+        resBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const res = btn.dataset.res;
+                appState.set('resolution', res);
             });
         });
 
@@ -139,9 +148,18 @@ export class Sidebar {
             projBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.proj === projVal));
         }
 
+        const resBtns = document.querySelectorAll('.res-btn[data-res]');
+        const resVal = appState.get('resolution');
+        if (resVal) {
+            resBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.res === resVal));
+        }
+
         appState.subscribe((state, key, value) => {
             if (key === 'projection') {
                 projBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.proj === value));
+            }
+            if (key === 'resolution') {
+                resBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.res === value));
             }
             const input = this.sidebarEl.querySelector(`[data-key="${key}"]`);
             if (input && document.activeElement !== input) {

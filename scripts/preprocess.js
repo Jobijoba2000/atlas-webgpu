@@ -345,24 +345,29 @@ async function run() {
         return;
     }
 
-    console.log(`--- Processing 10m Maps (${projectionsToProcess.map(p => p.id).join(', ')}) ---`);
+    console.log(`--- Processing Maps (${projectionsToProcess.map(p => p.id).join(', ')}) ---`);
 
-    const countriesGeoJSON = path.join(DATA_DIR, `ne_10m_admin_0_countries.geojson`);
+    const resolutions = ['110m', '50m', '10m', '5m'];
 
-    if (!fs.existsSync(countriesGeoJSON)) {
-        console.error(`Missing ${countriesGeoJSON}`);
-        return;
-    }
+    for (const res of resolutions) {
+        const countriesGeoJSON = path.join(DATA_DIR, `ne_${res}_admin_0_countries.geojson`);
 
-    const countries = JSON.parse(fs.readFileSync(countriesGeoJSON, 'utf8'));
+        if (!fs.existsSync(countriesGeoJSON)) {
+            console.warn(`[Warning] Missing ${countriesGeoJSON}, skipping resolution ${res}`);
+            continue;
+        }
 
-    for (const proj of projectionsToProcess) {
-        console.log(`\n=== Projection: ${proj.id} ===`);
-        const outputDir = path.join(OUTPUT_BASE_DIR, '10m');
-        if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+        console.log(`\n\n=== Loading GeoJSON for resolution: ${res} ===`);
+        const countries = JSON.parse(fs.readFileSync(countriesGeoJSON, 'utf8'));
 
-        const pC = processFeatures(countries.features, proj, false);
-        packFile(pC, path.join(outputDir, `countries_10m_${proj.id}.bin`), proj.id);
+        for (const proj of projectionsToProcess) {
+            console.log(`\n--- Projection: ${proj.id} (Res: ${res}) ---`);
+            const outputDir = path.join(OUTPUT_BASE_DIR, res);
+            if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+
+            const pC = processFeatures(countries.features, proj, false);
+            packFile(pC, path.join(outputDir, `countries_${res}_${proj.id}.bin`), proj.id);
+        }
     }
 
     console.log("\n--- Finished ---");

@@ -15,7 +15,7 @@ class AppState {
 
         // Map short URL params to config keys
         const paramMap = {
-            'res': 'default_quality',
+            'res': 'resolution',
             'proj': 'projection'
         };
 
@@ -47,7 +47,7 @@ class AppState {
         // Only sync a subset of "peristable" keys to keep URL clean
         const persistable = {
             'projection': 'proj',
-            'default_quality': 'res'
+            'resolution': 'res'
         };
 
         for (const [key, param] of Object.entries(persistable)) {
@@ -70,7 +70,7 @@ class AppState {
             this.config[key] = value;
 
             // Sync to URL if it's a persistable property
-            const persistable = ['projection', 'default_quality'];
+            const persistable = ['projection', 'resolution'];
             if (persistable.includes(key)) {
                 this.syncToUrl();
             }
@@ -82,7 +82,7 @@ class AppState {
     updateMultiple(newSettings) {
         let changed = false;
         let pChanged = false;
-        const persistable = ['projection', 'default_quality'];
+        const persistable = ['projection', 'resolution'];
 
         for (const [key, value] of Object.entries(newSettings)) {
             if (this.config[key] !== value) {

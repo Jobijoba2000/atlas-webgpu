@@ -45,6 +45,7 @@ async function startApp() {
   appState.subscribe((state, key, value) => {
     switch (key) {
       case 'projection': setProjection(value); break;
+      case 'resolution':
       case 'countrySaturation':
       case 'countryLightness':
       case 'mapBackgroundColor':
