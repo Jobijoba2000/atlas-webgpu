@@ -1,39 +1,45 @@
-# WebGL World Map
+# Atlas WebGPU
 
-Une carte du monde interactive en WebGL avec morphing entre projections (Mercator, Mollweide, Natural Earth 2, Orthographique).
+A high-performance WebGPU map rendering engine that compiles massive GeoJSON datasets into data-oriented binary buffers for blazing fast native-speed visualization.
+
+## Features
+- **WebGPU Native:** Leverages raw typed arrays to render massive topological features on the GPU.
+- **Pre-compiled Binary Pipeline:** Eliminates parsing overhead by baking complex triangulations (earcut) and coordinates into optimized `.bin` files (`scripts/preprocess.js`).
+- **Pixel-perfect Picking:** Supports 60FPS ID-based color picking offscreen texture for region selection.
+- **Glassmorphism UI:** Modern, dynamic translucent control interfaces natively layered over the high-performance buffer.
 
 ## Installation
 
-1. **Cloner le projet** :
+1. **Clone the repository**:
    ```bash
-   git clone https://github.com/Jobijoba2000/world-map-webgl.git
-   cd world-map-webgl
+   git clone https://github.com/Jobijoba2000/atlas-webgpu.git
+   cd atlas-webgpu
    ```
 
-2. **Installer les dépendances** :
+2. **Install dependencies**:
    ```bash
    npm install
    ```
 
-3. **Générer les fichiers binaires** :
+3. **Generate binary files**:
    ```bash
    node scripts/preprocess.js
    ```
 
-## Utilisation
+## Usage
 
-### Mode Développement
-Lancez le serveur local avec rechargement automatique :
+### Development Mode
+Start the local server with hot reloading :
 ```bash
 npm run dev
 ```
 
-### Mode Production (Build)
-Pour générer une version optimisée du site :
+### Production Build
+To generate an optimized bundle for hosting:
 ```bash
 npm run build
 ```
-Les fichiers générés se trouveront dans le dossier `dist/`. Pour les tester localement :
+Produced files will be inside `dist/`. You can preview the production build using:
 ```bash
 npm run preview
 ```
