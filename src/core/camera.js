@@ -1,6 +1,8 @@
 import * as d3 from 'd3';
 import { width, height, gpuCanvas as webglCanvas } from './gpuContext.js';
 
+import { getProjectionById } from '../config/projections.js';
+
 let isAutoRotating = false;
 let autoRotationRequestId = null;
 
@@ -32,9 +34,14 @@ export const zoomState = { x: 0, y: 0, k: 1 };
 export function setProjection(projId) {
     stopAutoRotation();
     isOrthographic = projId === 'orthographic';
-    // Reset zoom when switching projection for a clean start
-    zoomState.x = 0; zoomState.y = 0; zoomState.k = 1;
-    d3.select(webglCanvas).property("__zoom", d3.zoomIdentity);
+    
+    // Set initial zoom based on projection config
+    const projConfig = getProjectionById(projId);
+    zoomState.x = 0; 
+    zoomState.y = 0; 
+    zoomState.k = projConfig.initialZoom || 1.0;
+    
+    d3.select(webglCanvas).property("__zoom", d3.zoomIdentity.scale(zoomState.k));
     requestRebuild();
 }
 
