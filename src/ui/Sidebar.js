@@ -33,7 +33,7 @@ export class Sidebar {
         });
 
         // Projection logic
-        const projBtns = document.querySelectorAll('.svg-btn[data-proj]');
+        const projBtns = document.querySelectorAll('.proj-btn[data-proj]');
         projBtns.forEach(btn => {
             btn.addEventListener('click', () => {
                 const proj = btn.dataset.proj;
@@ -49,15 +49,6 @@ export class Sidebar {
                 appState.set('resolution', res);
             });
         });
-
-        // Sliding Overlay Toggle
-        const overlayContainer = document.getElementById('map-overlays');
-        const overlayToggle = document.getElementById('overlay-toggle');
-        if (overlayToggle && overlayContainer) {
-            overlayToggle.addEventListener('click', () => {
-                overlayContainer.classList.toggle('is-open');
-            });
-        }
     }
 
     initAccordions() {

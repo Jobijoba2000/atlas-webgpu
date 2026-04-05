@@ -409,204 +409,69 @@
             display: none !important;
         }
 
-        /* Morphing Map Controls Container */
-        #map-overlays {
+        /* Projection Selector */
+        #projection-selector {
             position: absolute;
-            bottom: 24px;
+            bottom: 40px;
             left: 24px;
-            width: 56px;
-            height: 56px;
-            background: rgba(0, 0, 0, 0.5);
-            /* #000 with 0.5 opacity */
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 28px;
             z-index: 1000;
             display: flex;
-            flex-direction: column;
-            gap: 24px;
-            pointer-events: auto;
-            backdrop-filter: blur(10px);
-            overflow: hidden;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
-
-            /* Morphing Transition */
-            transition: all 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6);
-            padding: 0;
-        }
-
-        #map-overlays.is-open {
-            width: 180px;
-            /* Much narrower as requested */
-            height: 380px;
-            /* Slightly more to accommodate buttons */
-            background: rgba(0, 0, 0, 0.5);
-            border: 1px solid #ffffff;
-            /* Close to white as requested */
-            border-radius: 20px;
-            padding: 24px 16px 74px 16px;
-            /* More bottom padding for toggle button */
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(10px);
-        }
-
-        /* The Morphing Toggle Button - Locked at the bottom */
-        #overlay-toggle {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 56px;
-            height: 56px;
-            background: transparent;
-            border: none;
-            cursor: pointer;
-            display: flex;
+            flex-direction: row;
+            gap: 10px;
+            background: rgba(15, 15, 15, 0.7);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 12px;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
             align-items: center;
-            justify-content: center;
-            transition: all 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6);
-            z-index: 1001;
         }
 
-        /* Keep toggle at the bottom when open */
-        #map-overlays.is-open #overlay-toggle {
-            bottom: 6px;
-            left: 6px;
-            width: 48px;
-            height: 48px;
-        }
-
-        /* Icon Lines for Morphing (Menu -> Cross) */
-        .toggle-icon {
-            position: relative;
-            width: 28px;
-            /* Slightly larger base */
-            height: 20px;
-            transition: all 0.6s;
-        }
-
-        .toggle-icon span {
-            position: absolute;
-            left: 0;
-            width: 100%;
-            height: 4px;
-            /* Thicker for better visibility */
-            background: #ffffff;
-            border-radius: 2px;
-            transition: all 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6);
-        }
-
-        .toggle-icon span:nth-child(1) {
-            top: 0;
-        }
-
-        .toggle-icon span:nth-child(2) {
-            top: 8px;
-        }
-
-        .toggle-icon span:nth-child(3) {
-            top: 16px;
-        }
-
-        /* Cross Transformation - Clean & Symmetric */
-        #map-overlays.is-open .toggle-icon span:nth-child(1) {
-            top: 50%;
-            transform: translateY(-50%) rotate(45deg);
-        }
-
-        #map-overlays.is-open .toggle-icon span:nth-child(2) {
-            opacity: 0;
-        }
-
-        #map-overlays.is-open .toggle-icon span:nth-child(3) {
-            top: 50%;
-            transform: translateY(-50%) rotate(-45deg);
-        }
-
-        /* Content Visibility */
-        .overlay-section {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            opacity: 0;
-            transform: translateY(10px);
-            transition: all 0.4s ease;
-            pointer-events: none;
-        }
-
-        #map-overlays.is-open .overlay-section {
-            opacity: 1;
-            transform: translateY(0);
-            pointer-events: auto;
-            transition-delay: 0.3s;
-            /* Wait for expansion */
-        }
-
-        .overlay-section {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .overlay-title {
-            color: #fff;
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 2px;
+        .proj-label {
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 10px;
+            font-weight: 800;
             text-transform: uppercase;
-            margin-bottom: 2px;
-            padding-left: 4px;
+            letter-spacing: 1.5px;
+            margin-right: 6px;
         }
 
-        .overlay-buttons {
+        .proj-btns {
             display: flex;
-            flex-direction: column;
-            gap: 8px;
-            align-items: flex-start;
+            flex-direction: row;
+            gap: 6px;
         }
 
-        .svg-btn {
-            background: transparent;
-            border: 1px solid transparent;
-            color: #fff;
-            padding: 8px 16px;
-            border-radius: 8px;
+        .proj-btn {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.6);
+            padding: 8px 12px;
+            border-radius: 6px;
             cursor: pointer;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            transition: all 0.2s ease;
-            outline: none;
-            width: 100%;
-        }
-
-        .svg-btn svg {
-            width: 44px;
-            height: 44px;
+            font-size: 11px;
+            font-weight: 600;
             transition: all 0.2s ease;
         }
 
-        .svg-btn span {
-            font-size: 13px;
-            font-weight: 400;
-            letter-spacing: 1px;
-            transition: all 0.2s ease;
+        .proj-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border-color: rgba(255, 255, 255, 0.2);
         }
 
-        .svg-btn:hover {
-            color: #fff;
-            background: transparent;
-            border: 1px solid #fff;
-        }
-
-        .svg-btn.active {
-            color: #fff;
-            background: transparent;
-            border: 1px solid #fff;
+        .proj-btn.active {
+            background: rgba(255, 255, 255, 0.9);
+            color: #000;
+            border-color: #fff;
+            box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
         }
 
         /* Resolution Selector */
         #resolution-selector {
             position: absolute;
-            bottom: 80px;
+            bottom: 40px;
             right: 24px;
             z-index: 1000;
             display: flex;
@@ -976,36 +841,15 @@
         </div>
     </div>
 
-    <div id="map-overlays">
-        <button id="overlay-toggle" title="Réglages de la carte">
-            <div class="toggle-icon">
-                <span></span>
-                <span></span>
-                <span></span>
-            </div>
-        </button>
-        <div class="overlay-section">
-            <div class="overlay-title">PROJECTIONS</div>
-            <div class="overlay-buttons" id="projection-buttons">
-                <button class="svg-btn active" data-proj="mercator">
-                    <span>Mercator</span>
-                </button>
-                <button class="svg-btn" data-proj="natural-earth-2">
-                    <span>Nat. Earth 2</span>
-                </button>
-                <button class="svg-btn" data-proj="mollweide">
-                    <span>Mollweide</span>
-                </button>
-                <button class="svg-btn" data-proj="robinson">
-                    <span>Robinson</span>
-                </button>
-                <button class="svg-btn" data-proj="winkel3">
-                    <span>Winkel Tripel</span>
-                </button>
-                <button class="svg-btn" data-proj="orthographic">
-                    <span>Globe (3D)</span>
-                </button>
-            </div>
+    <div id="projection-selector">
+        <div class="proj-label">Projection</div>
+        <div class="proj-btns" id="projection-buttons">
+            <button class="proj-btn active" data-proj="mercator">Mercator</button>
+            <button class="proj-btn" data-proj="natural-earth-2">Nat. Earth</button>
+            <button class="proj-btn" data-proj="mollweide">Mollweide</button>
+            <button class="proj-btn" data-proj="robinson">Robinson</button>
+            <button class="proj-btn" data-proj="winkel3">Winkel</button>
+            <button class="proj-btn" data-proj="orthographic">Globe 3D</button>
         </div>
     </div>
 
