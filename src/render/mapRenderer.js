@@ -214,9 +214,8 @@ export function createRenderer(deps) {
             ensurePickingResources();
             resetUniformRing();
 
-            const dpr = window.devicePixelRatio || 1;
-            const x = Math.floor(clientX * dpr);
-            const y = Math.floor(clientY * dpr);
+            const x = Math.floor(clientX);
+            const y = Math.floor(clientY);
 
             if (x < 0 || y < 0 || x >= pickingWidth || y >= pickingHeight) return null;
 
