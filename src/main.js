@@ -49,8 +49,8 @@ async function startApp() {
       case 'countrySaturation':
       case 'countryLightness':
       case 'mapBackgroundColor':
-          loaders.loadGlobalData();
-          break;
+        loaders.loadGlobalData();
+        break;
     }
     redraw();
   });
@@ -64,7 +64,7 @@ async function startApp() {
   setRedrawCallback(redraw);
   setRebuildCallback(() => loaders.loadGlobalData());
   initCamera();
-  
+
   // Premier chargement
   setProjection(appState.get('projection'));
 }

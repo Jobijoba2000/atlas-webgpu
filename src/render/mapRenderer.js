@@ -102,31 +102,43 @@ export function createRenderer(deps) {
 
         const bgTri = [], fgTri = [], bgLines = [], fgLines = [];
 
-        getRenderList().forEach(item => {
+        const renderList = getRenderList();
+        const atlasItem = renderList.find(item => item.isAtlas);
+
+        renderList.forEach(item => {
             if (item.isRegion && !loadedRegions.has(item.parentIso)) return;
 
             let itemOpacity = 1.0;
-            if (!item.isRegion && isAnyLoaded) {
+            if (item.isAtlas) {
+                itemOpacity = exclusiveMode ? 0.4 : 1.0;
+            } else if (!item.isRegion && isAnyLoaded) {
                 const focused = loadedRegions.has(item.id) || (item.feature && loadedRegions.has(item.feature.iso));
                 itemOpacity = exclusiveMode ? (focused ? 1.0 : 0.0) : (focused ? 1.0 : 0.4);
             }
 
-            const tData = {
-                pos: item.pos,
-                posLonLat: item.posLonLat,
-                colors: item.colors,
-                count: item.count,
-                uOpacity: itemOpacity,
-            };
-            if (item.isRegion) fgTri.push(tData); else bgTri.push(tData);
+            if (item.isAtlas) {
+                bgTri.push({ ...baseProps, pos: item.pos, colors: item.colors, count: item.count, uOpacity: itemOpacity, isAtlas: true });
+            } else if (item.isReference) {
+                const focused = loadedRegions.has(item.iso);
+                if (focused) {
+                    fgTri.push({ ...baseProps, pos: atlasItem.pos, colors: atlasItem.colors, count: item.atlasCount, offset: item.atlasOffset, uOpacity: 1.0, forceDraw: true });
+                }
+            } else {
+                // Legacy regions or others
+                const tData = {
+                    ...baseProps,
+                    pos: item.pos, colors: item.colors, pickColors: item.pickColors, count: item.count, uOpacity: itemOpacity,
+                    isAtlas: item.isAtlas, forceDraw: item.forceDraw || (item.isRegion && loadedRegions.has(item.id))
+                };
+                if (item.isRegion) fgTri.push(tData); else bgTri.push(tData);
+            }
 
             if (item.lineVertexBuffer && item.elements) {
                 const lData = {
-                    lineVertexBuffer: item.lineVertexBuffer,
-                    elements: item.elements,
-                    uThickness: dynamicThickness,
-                    uColor: strokeColor,
-                    uOpacity: (item.isRegion && exclusiveMode) ? 1.0 : itemOpacity,
+                    ...baseProps,
+                    lineVertexBuffer: item.lineVertexBuffer, lineColors: item.lineColors, elements: item.elements,
+                    uThickness: dynamicThickness, uColor: strokeColor, uOpacity: (item.isRegion && exclusiveMode) ? 1.0 : Math.max(0.2, itemOpacity),
+                    isAtlasLines: item.isAtlasLines, forceDraw: item.forceDraw
                 };
                 if (item.isRegion) fgLines.push(lData); else bgLines.push(lData);
             }
@@ -227,11 +239,13 @@ export function createRenderer(deps) {
 
             getRenderList().forEach(item => {
                 if (item.isRegion && !loadedRegions.has(item.parentIso)) return;
-                if (!item.uPickColor) return;
+                if (!item.uPickColor && !item.isAtlas) return;
                 const tData = {
                     pos: item.pos,
                     count: item.count,
                     uPickColor: item.uPickColor,
+                    pickColors: item.pickColors,
+                    isAtlas: item.isAtlas,
                     uTranslate, uScale,
                     uResolution: [width, height],
                     uRotate: orthoRotate,

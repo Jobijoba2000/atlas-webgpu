@@ -22,6 +22,38 @@ export function setupDataLoaders(deps) {
         const stride = header.stride || 2;
         const { countrySat, countryLit } = appState.getTheme ? appState.getTheme() : { countrySat: 0.5, countryLit: 0.5 };
 
+        // 1. Préparation des Buffers Généraux pour les Polygones (Triangles)
+        const totalTriVertices = header.polyIndexCount; // On dé-indexe pour le batching simple
+        const atlasPos = new Float32Array(totalTriVertices * 2);
+        const atlasCol = new Float32Array(totalTriVertices * 3);
+        const atlasPick = new Float32Array(totalTriVertices * 3);
+
+        // 2. Préparation pour les Lignes
+        let totalLineVertices = 0;
+        let totalLineIndices = 0;
+        meta.forEach(m => {
+            if (m.path) {
+                for (let i = 0; i < m.path.count; i++) {
+                    const pIdx = m.path.offset + i;
+                    const start = lpStart[pIdx];
+                    const end = (pIdx === header.pathCount - 1) ? lpInd.length : lpStart[pIdx + 1];
+                    const N = end - start;
+                    if (N >= 2) {
+                        totalLineVertices += N * 2;
+                        totalLineIndices += (N - 1) * 6;
+                    }
+                }
+            }
+        });
+
+        const atlasLineVerts = new Float32Array(totalLineVertices * 7); // [pos.x, pos.y, prev.x, prev.y, next.x, next.y, side]
+        const atlasLineCol = new Float32Array(totalLineVertices * 3);
+        const atlasLineIndices = new Uint32Array(totalLineIndices);
+
+        let triVOffset = 0;
+        let lineVOffset = 0;
+        let lineIOffset = 0;
+
         meta.forEach(m => {
             let pickId = mapState.isoToPickId.get(m.iso);
             if (pickId === undefined) {
@@ -29,10 +61,11 @@ export function setupDataLoaders(deps) {
                 mapState.isoToPickId.set(m.iso, pickId);
                 mapState.pickIdToIso.set(pickId, m.iso);
             }
-            const rPick = (pickId & 255) / 255.0;
-            const gPick = ((pickId >> 8) & 255) / 255.0;
-            const bPick = ((pickId >> 16) & 255) / 255.0;
-            const uPickColor = [rPick, gPick, bPick];
+            const uPickColor = [
+                (pickId & 255) / 255.0,
+                ((pickId >> 8) & 255) / 255.0,
+                ((pickId >> 16) & 255) / 255.0
+            ];
 
             const baseColor = getMapColor(m.mapcolor9);
             const hsl = d3.hsl(d3.rgb(baseColor[0] * 255, baseColor[1] * 255, baseColor[2] * 255));
@@ -40,65 +73,64 @@ export function setupDataLoaders(deps) {
             const rgb = hsl.rgb();
             const vColor = [rgb.r / 255, rgb.g / 255, rgb.b / 255];
 
+            // Remplissage des polygones
             const tCount = m.tri.count;
             const tOff = m.tri.offset;
-            const pData = new Float32Array(tCount * 2);
-            const cData = new Float32Array(tCount * 3);
-
+            const atlasTriStart = triVOffset;
             for (let i = 0; i < tCount; i++) {
                 const gIdx = polyIndices[tOff + i];
-                pData[i * 2] = polyPos[gIdx * stride];
-                pData[i * 2 + 1] = polyPos[gIdx * stride + 1];
-                cData[i * 3] = vColor[0]; cData[i * 3 + 1] = vColor[1]; cData[i * 3 + 2] = vColor[2];
+                const vBase = triVOffset * 2;
+                const cBase = triVOffset * 3;
+                atlasPos[vBase] = polyPos[gIdx * stride];
+                atlasPos[vBase + 1] = polyPos[gIdx * stride + 1];
+                atlasCol[cBase] = vColor[0]; atlasCol[cBase + 1] = vColor[1]; atlasCol[cBase + 2] = vColor[2];
+                atlasPick[cBase] = uPickColor[0]; atlasPick[cBase + 1] = uPickColor[1]; atlasPick[cBase + 2] = uPickColor[2];
+                triVOffset++;
             }
 
-            const featurePaths = [];
+            // Reference pour le dessin individuel (surbrillance, etc.) sans doubler les buffers
+            mapState.renderList.push({
+                id: m.iso,
+                iso: m.iso,
+                atlasOffset: atlasTriStart,
+                atlasCount: tCount,
+                isReference: true,
+                feature: { iso: m.iso, properties: { name: m.name } }
+            });
+
+            // Remplissage des lignes
             if (m.path) {
                 for (let i = 0; i < m.path.count; i++) {
                     const pIdx = m.path.offset + i;
                     const start = lpStart[pIdx];
                     const end = (pIdx === header.pathCount - 1) ? lpInd.length : lpStart[pIdx + 1];
-                    featurePaths.push(lpInd.slice(start, end));
+                    const path = lpInd.slice(start, end);
+                    const N = path.length;
+                    if (N < 2) continue;
+
+                    const pathStartV = lineVOffset;
+                    for (let j = 0; j < N; j++) {
+                        const cur = path[j], prev = path[Math.max(0, j - 1)], next = path[Math.min(N - 1, j + 1)];
+                        for (let side of [1, -1]) {
+                            const k = lineVOffset * 7;
+                            const ck = lineVOffset * 3;
+                            atlasLineVerts[k + 0] = polyPos[cur * stride]; atlasLineVerts[k + 1] = polyPos[cur * stride + 1];
+                            atlasLineVerts[k + 2] = polyPos[prev * stride]; atlasLineVerts[k + 3] = polyPos[prev * stride + 1];
+                            atlasLineVerts[k + 4] = polyPos[next * stride]; atlasLineVerts[k + 5] = polyPos[next * stride + 1];
+                            atlasLineVerts[k + 6] = side;
+                            atlasLineCol[ck] = 1.0; atlasLineCol[ck + 1] = 1.0; atlasLineCol[ck + 2] = 1.0; // Blanc par défaut
+                            lineVOffset++;
+                        }
+                        if (j < N - 1) {
+                            const cV = lineVOffset - 2, nV = lineVOffset;
+                            atlasLineIndices[lineIOffset++] = cV; atlasLineIndices[lineIOffset++] = cV + 1; atlasLineIndices[lineIOffset++] = nV;
+                            atlasLineIndices[lineIOffset++] = cV + 1; atlasLineIndices[lineIOffset++] = nV + 1; atlasLineIndices[lineIOffset++] = nV;
+                        }
+                    }
                 }
             }
 
-            let totalLineVerts = 0;
-            featurePaths.forEach(p => totalLineVerts += p.length * 2);
-            const lineVerts = new Float32Array(totalLineVerts * 7);
-            const lineInds = new Uint32Array(Math.max(0, (totalLineVerts - featurePaths.length * 2) * 3));
-            let vOff = 0, eOff = 0;
-
-            featurePaths.forEach(path => {
-                const N = path.length; if (N < 2) return;
-                for (let i = 0; i < N; i++) {
-                    const cur = path[i], prev = path[Math.max(0, i - 1)], next = path[Math.min(N - 1, i + 1)];
-                    for (let side of [1, -1]) {
-                        const k = vOff * 7;
-                        lineVerts[k + 0] = polyPos[cur * stride]; lineVerts[k + 1] = polyPos[cur * stride + 1];
-                        lineVerts[k + 2] = polyPos[prev * stride]; lineVerts[k + 3] = polyPos[prev * stride + 1];
-                        lineVerts[k + 4] = polyPos[next * stride]; lineVerts[k + 5] = polyPos[next * stride + 1];
-                        lineVerts[k + 6] = side;
-                        vOff++;
-                    }
-                    if (i < N - 1) {
-                        const cV = vOff - 2, nV = vOff;
-                        lineInds[eOff++] = cV; lineInds[eOff++] = cV + 1; lineInds[eOff++] = nV;
-                        lineInds[eOff++] = cV + 1; lineInds[eOff++] = nV + 1; lineInds[eOff++] = nV;
-                    }
-                }
-            });
-
-            const renderItem = {
-                id: m.iso,
-                pickId: pickId,
-                uPickColor: uPickColor,
-                pos: gpuBuffer(pData), colors: gpuBuffer(cData), count: tCount,
-                lineVertexBuffer: totalLineVerts > 0 ? gpuBuffer(lineVerts) : null,
-                elements: lineInds.length > 0 ? gpuElements({ data: lineInds }) : null,
-                feature: { iso: m.iso, properties: { name: m.name } }
-            };
-            mapState.renderList.push(renderItem);
-
+            // Labels (restent individuels car ils ont des ancres/tailles spécifiques)
             if (m.labelMetrics && fontAtlas) {
                 const layout = computeLabelLayout(m, fontAtlas);
                 const geom = getTextGeometry(m.name, 1.0, fontAtlas);
@@ -114,6 +146,26 @@ export function setupDataLoaders(deps) {
                 }
             }
         });
+
+        // 3. Création des items de rendu uniques (Batchés)
+        mapState.renderList.push({
+            id: 'atlas_polygons',
+            pos: gpuBuffer(atlasPos),
+            colors: gpuBuffer(atlasCol),
+            pickColors: gpuBuffer(atlasPick),
+            count: totalTriVertices,
+            isAtlas: true
+        });
+
+        if (totalLineVertices > 0) {
+            mapState.renderList.push({
+                id: 'atlas_lines',
+                lineVertexBuffer: gpuBuffer(atlasLineVerts),
+                lineColors: gpuBuffer(atlasLineCol),
+                elements: gpuElements({ data: atlasLineIndices }),
+                isAtlasLines: true
+            });
+        }
     }
 
     async function loadGlobalData() {

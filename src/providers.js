@@ -34,7 +34,7 @@ export const NATURAL_EARTH_PROVIDER = {
         }
 
         const countriesUrl = `data/binary/${res}/countries_${res}_${projId}.bin`;
-        
+
         try {
             const countries = await this._fetchAndDecode(countriesUrl);
             if (!countries) throw new Error(`Échec du chargement : ${countriesUrl}`);
