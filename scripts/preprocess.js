@@ -352,15 +352,24 @@ async function run() {
     const resolutions = ['110m', '50m', '10m', '5m'];
 
     for (const res of resolutions) {
-        const countriesGeoJSON = path.join(DATA_DIR, `ne_${res}_admin_0_countries.geojson`);
+        const baseName = `ne_${res}_admin_0_countries.geojson`;
+        let filePath = path.join(DATA_DIR, baseName);
+        let isGzipped = false;
 
-        if (!fs.existsSync(countriesGeoJSON)) {
-            console.warn(`[Warning] Missing ${countriesGeoJSON}, skipping resolution ${res}`);
-            continue;
+        if (!fs.existsSync(filePath)) {
+            if (fs.existsSync(filePath + '.gz')) {
+                filePath += '.gz';
+                isGzipped = true;
+            } else {
+                console.warn(`[Warning] Missing ${filePath}, skipping resolution ${res}`);
+                continue;
+            }
         }
 
-        console.log(`\n\n=== Loading GeoJSON for resolution: ${res} ===`);
-        const countries = JSON.parse(fs.readFileSync(countriesGeoJSON, 'utf8'));
+        console.log(`\n\n=== Loading GeoJSON for resolution: ${res} (${isGzipped ? 'Gzipped' : 'Raw'}) ===`);
+        const fileBuf = fs.readFileSync(filePath);
+        const content = isGzipped ? zlib.gunzipSync(fileBuf).toString('utf8') : fileBuf.toString('utf8');
+        const countries = JSON.parse(content);
 
         for (const proj of projectionsToProcess) {
             console.log(`\n--- Projection: ${proj.id} (Res: ${res}) ---`);
