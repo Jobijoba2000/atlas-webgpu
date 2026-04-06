@@ -317,7 +317,7 @@ function packFile(processed, outputFilename, projId) {
     let headerBuf = Buffer.from(JSON.stringify(header), 'utf8');
     headerBuf = pad(headerBuf);
 
-    const finalBuf = Buffer.concat([
+    const rawBuf = Buffer.concat([
         Buffer.from('GEOB'),
         Buffer.alloc(4).fill(0).map((_, i) => (headerBuf.length >> (8 * i)) & 0xFF), // header length u32le
         headerBuf,
@@ -328,8 +328,10 @@ function packFile(processed, outputFilename, projId) {
         lpStartBuf
     ]);
 
-    fs.writeFileSync(outputFilename, finalBuf);
-    console.log(`Saved ${outputFilename} (${(finalBuf.length / 1024).toFixed(1)} KB)`);
+    const compressedBuf = zlib.gzipSync(rawBuf);
+    fs.writeFileSync(outputFilename, compressedBuf);
+    const savings = ((1 - compressedBuf.length / rawBuf.length) * 100).toFixed(1);
+    console.log(`Saved ${outputFilename} (${(compressedBuf.length / 1024).toFixed(1)} KB, compression: ${savings}%)`);
 }
 
 async function run() {

@@ -11,7 +11,15 @@ export const NATURAL_EARTH_PROVIDER = {
             this._fetchAndDecode = async (url) => {
                 const response = await fetch(url);
                 if (!response.ok) return null;
-                const buf = new Uint8Array(await response.arrayBuffer());
+                let buf = new Uint8Array(await response.arrayBuffer());
+
+                // Décompression si GZIP (magic: 1f 8b)
+                if (buf[0] === 0x1f && buf[1] === 0x8b) {
+                    const ds = new DecompressionStream('gzip');
+                    const decompressedStream = new Response(buf).body.pipeThrough(ds);
+                    buf = new Uint8Array(await new Response(decompressedStream).arrayBuffer());
+                }
+
                 const magic = new TextDecoder().decode(buf.slice(0, 4));
                 if (magic !== 'GEOB') throw new Error("Format Binaire non reconnu");
                 const dataView = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);

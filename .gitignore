@@ -13,10 +13,9 @@ dist-ssr
 *.sw?
 
 # Data
-/data/
 public/data/binary/
 *.bin
-*.geojson
+# *.geojson
 *.csv
 *.sqlite
 
