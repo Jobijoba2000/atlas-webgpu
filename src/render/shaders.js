@@ -45,14 +45,15 @@ function makeShader(label, code) {
 const POLY_WGSL = /* wgsl */`
 struct Uniforms {
     uOpacity      : f32,
-    _p0           : f32,
+    uThickness    : f32,
     uTranslate    : vec2f,
     uScale        : f32,
-    _p1           : f32,
+    uIsOrtho      : f32,
     uResolution   : vec2f,
     uRotate       : vec2f,
-    uIsOrtho      : f32,
-    _p2           : f32,
+    _pad0         : vec2f,
+    uColor        : vec3f,
+    _pad1         : f32,
 };
 
 @group(0) @binding(0) var<uniform> u : Uniforms;
@@ -107,18 +108,27 @@ const POLY_VB_LAYOUTS = [
 
 let polyPipeline = null;
 let polyBG_Uniforms = null;
-const polyUniformBuf = new Float32Array(12);
+let uniformBGL = null;
+const polyUniformBuf = new Float32Array(16); // 64 octets
+
+function ensureUniformBGL() {
+    if (uniformBGL) return;
+    ensureRingBuffer();
+    uniformBGL = device.createBindGroupLayout({
+        entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform', hasDynamicOffset: true, minBindingSize: 64 } }],
+    });
+    polyBG_Uniforms = device.createBindGroup({ 
+        layout: uniformBGL, 
+        entries: [{ binding: 0, resource: { buffer: uniformRingBuffer, size: 64 } }] 
+    });
+}
 
 function ensurePolyPipeline() {
     if (polyPipeline) return;
-    ensureRingBuffer();
+    ensureUniformBGL();
     const mod = makeShader('poly', POLY_WGSL);
-    const bgl = device.createBindGroupLayout({
-        entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform', hasDynamicOffset: true, minBindingSize: 48 } }],
-    });
-    polyBG_Uniforms = device.createBindGroup({ layout: bgl, entries: [{ binding: 0, resource: { buffer: uniformRingBuffer, size: 48 } }] });
     polyPipeline = device.createRenderPipeline({
-        layout: device.createPipelineLayout({ bindGroupLayouts: [bgl] }),
+        layout: device.createPipelineLayout({ bindGroupLayouts: [uniformBGL] }),
         vertex: { module: mod, entryPoint: 'vs', buffers: POLY_VB_LAYOUTS },
         fragment: { module: mod, entryPoint: 'fs', targets: [{ format: presentationFormat, blend: BLEND_OVER }] },
         primitive: { topology: 'triangle-list' },
@@ -134,11 +144,13 @@ export function drawPolygons(pass, items) {
         if (!p.isAtlas && !p.forceDraw) continue;
 
         polyUniformBuf[0] = p.uOpacity || 1.0; 
+        polyUniformBuf[1] = 1.0; // Thickness par défaut
         polyUniformBuf[2] = p.uTranslate[0]; polyUniformBuf[3] = p.uTranslate[1];
         polyUniformBuf[4] = p.uScale; 
+        polyUniformBuf[5] = p.uIsOrtho ? 1.0 : 0.0;
         polyUniformBuf[6] = p.uResolution[0]; polyUniformBuf[7] = p.uResolution[1];
-        polyUniformBuf[8] = p.uRotate[0]; polyUniformBuf[9] = p.uRotate[1]; 
-        polyUniformBuf[10] = p.uIsOrtho ? 1.0 : 0.0;
+        polyUniformBuf[8] = p.uRotate[0]; polyUniformBuf[9] = p.uRotate[1];
+        polyUniformBuf[12] = 1.0; polyUniformBuf[13] = 1.0; polyUniformBuf[14] = 1.0; // Color blanc par défaut
         const dynOffset = allocSlot(polyUniformBuf);
         pass.setBindGroup(0, polyBG_Uniforms, [dynOffset]);
         pass.setVertexBuffer(0, p.pos._gpuBuffer);
@@ -155,15 +167,16 @@ export function drawPolygons(pass, items) {
 
 const PICK_WGSL = /* wgsl */`
 struct Uniforms {
-    uOpacity      : f32, 
-    _p0           : f32,
+    uOpacity      : f32,
+    uThickness    : f32,
     uTranslate    : vec2f,
     uScale        : f32,
-    _p1           : f32,
+    uIsOrtho      : f32,
     uResolution   : vec2f,
     uRotate       : vec2f,
-    uIsOrtho      : f32,
-    _p2           : f32,
+    _pad0         : vec2f,
+    uColor        : vec3f,
+    _pad1         : f32,
 };
 
 @group(0) @binding(0) var<uniform> u : Uniforms;
@@ -266,7 +279,9 @@ struct Uniforms {
     uIsOrtho   : f32,
     uResolution: vec2f,
     uRotate    : vec2f,
-    _p0        : f32,
+    _pad       : vec2f,
+    uColor     : vec3f,
+    _pad2      : f32,
 };
 @group(0) @binding(0) var<uniform> u : Uniforms;
 
@@ -362,9 +377,9 @@ function ensureLinePipeline() {
     ensureRingBuffer();
     const mod = makeShader('line', LINE_WGSL);
     const bgl = device.createBindGroupLayout({
-        entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform', hasDynamicOffset: true, minBindingSize: 48 } }],
+        entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform', hasDynamicOffset: true, minBindingSize: 64 } }],
     });
-    lineBG_Uniforms = device.createBindGroup({ layout: bgl, entries: [{ binding: 0, resource: { buffer: uniformRingBuffer, size: 48 } }] });
+    lineBG_Uniforms = device.createBindGroup({ layout: bgl, entries: [{ binding: 0, resource: { buffer: uniformRingBuffer, size: 64 } }] });
     linePipeline = device.createRenderPipeline({
         layout: device.createPipelineLayout({ bindGroupLayouts: [bgl] }),
         vertex: { module: mod, entryPoint: 'vs', buffers: LINE_VB_LAYOUTS },
@@ -373,17 +388,19 @@ function ensureLinePipeline() {
     });
 }
 
-export function drawThickLines(pass, items) {
+export function drawThickLines(pass, items, overrideColor) {
     if (!items || items.length === 0) return;
     ensureLinePipeline();
     pass.setPipeline(linePipeline);
     for (const p of items) {
-        if (!p.lineVertexBuffer || !p.elements || !p.isAtlasLines) continue;
+        if (!p.lineVertexBuffer || !p.elements) continue;
+        const finalColor = overrideColor || p.uColor || [1,1,1];
         lineUniformBuf[0] = p.uOpacity || 1.0; lineUniformBuf[1] = p.uThickness;
         lineUniformBuf[2] = p.uTranslate[0]; lineUniformBuf[3] = p.uTranslate[1];
         lineUniformBuf[4] = p.uScale; lineUniformBuf[5] = p.uIsOrtho ? 1.0 : 0.0;
         lineUniformBuf[6] = p.uResolution[0]; lineUniformBuf[7] = p.uResolution[1];
         lineUniformBuf[8] = p.uRotate[0]; lineUniformBuf[9] = p.uRotate[1];
+        lineUniformBuf[12] = finalColor[0]; lineUniformBuf[13] = finalColor[1]; lineUniformBuf[14] = finalColor[2];
         const dynOffset = allocSlot(lineUniformBuf);
         pass.setBindGroup(0, lineBG_Uniforms, [dynOffset]);
         pass.setVertexBuffer(0, p.lineVertexBuffer._gpuBuffer);
@@ -546,5 +563,165 @@ export function drawTextFull(pass, items) {
         pass.setBindGroup(0, textBG_Uniforms, [dynOffset]); pass.setBindGroup(1, bgT);
         pass.setVertexBuffer(0, p.uPositions._gpuBuffer); pass.setVertexBuffer(1, p.uUvs._gpuBuffer);
         pass.draw(p.count);
+    }
+}
+
+// ─── FAST THICK LINES (Lignes avec normales pré-calculées sur CPU) ──────────
+const FAST_LINE_WGSL = /* wgsl */`
+struct Uniforms {
+    uOpacity      : f32,
+    uThickness    : f32,
+    uTranslate    : vec2f,
+    uScale        : f32,
+    uIsOrtho      : f32,
+    uResolution   : vec2f,
+    uRotate       : vec2f,
+    _pad0         : vec2f,
+    uColor        : vec3f,
+    _pad1         : f32,
+};
+@group(0) @binding(0) var<uniform> u : Uniforms;
+
+struct VOut {
+    @builtin(position) pos : vec4f,
+    @location(0) vZ        : f32,
+};
+
+const PI = 3.1415926535f;
+
+fn project(p: vec2f) -> vec3f {
+    let center = u.uResolution / 2.0;
+    if (u.uIsOrtho > 0.5) {
+        let lon = p.x * PI / 180.0;
+        let lat = p.y * PI / 180.0;
+        let rLon = u.uRotate.x * PI / 180.0;
+        let rLat = u.uRotate.y * PI / 180.0;
+        let dl = lon - rLon;
+        let x = cos(lat) * sin(dl);
+        let yr = cos(rLat) * sin(lat) - sin(rLat) * cos(lat) * cos(dl);
+        let zr = sin(rLat) * sin(lat) + cos(rLat) * cos(lat) * cos(dl);
+        let pxO = vec2f(x * 120.0, -yr * 120.0) * u.uScale + u.uTranslate + center;
+        return vec3f(pxO, zr);
+    } else {
+        return vec3f(p * u.uScale + u.uTranslate + center, 1.0);
+    }
+}
+
+@vertex fn vs(
+    @location(0) aPos  : vec2f,
+    @location(1) aPrev : vec2f,
+    @location(2) aNext : vec2f,
+    @location(3) aSide : f32
+) -> VOut {
+    var o: VOut;
+    let pos  = project(aPos);
+    let prev = project(aPrev);
+    let next = project(aNext);
+
+    let d1 = pos.xy - prev.xy;
+    let d2 = next.xy - pos.xy;
+    
+    var dir1 = vec2f(0.0);
+    var dir2 = vec2f(0.0);
+    
+    if (length(d1) > 0.0001) { dir1 = normalize(d1); }
+    if (length(d2) > 0.0001) { dir2 = normalize(d2); }
+    
+    if (length(d1) <= 0.0001) { dir1 = dir2; }
+    if (length(d2) <= 0.0001) { dir2 = dir1; }
+
+    let ds = dir1 + dir2;
+    var miterDir = vec2f(-dir1.y, dir1.x); // Fallback: simple normal
+    if (length(ds) > 0.0001) {
+        miterDir = normalize(ds);
+    }
+
+    let normal = vec2f(-miterDir.y, miterDir.x);
+    let lineNormal = vec2f(-dir1.y, dir1.x);
+    let miterDot = dot(normal, lineNormal);
+    
+    // Facteur d'extension (1/cos) avec limite de miter
+    var miterLen = u.uThickness / max(abs(miterDot), 0.1);
+    miterLen = min(miterLen, u.uThickness * 4.0);
+
+    let finalPos = pos.xy + normal * aSide * (miterLen / 2.0);
+    var clip = (finalPos / u.uResolution) * 2.0 - 1.0;
+    clip.y = -clip.y;
+
+    o.pos = vec4f(clip, 0.0, 1.0);
+    o.vZ = pos.z;
+    return o;
+}
+
+@fragment fn fs(i: VOut) -> @location(0) vec4f {
+    if (u.uIsOrtho > 0.5 && i.vZ < 0.0) { discard; }
+    return vec4f(u.uColor, u.uOpacity);
+}
+`;
+
+let fastLinePipeline = null;
+function ensureFastLinePipeline() {
+    if (!fastLinePipeline) {
+        ensureUniformBGL();
+        fastLinePipeline = device.createRenderPipeline({
+            label: 'fast line pipeline',
+            layout: device.createPipelineLayout({ bindGroupLayouts: [uniformBGL] }),
+            vertex: {
+                module: device.createShaderModule({ code: FAST_LINE_WGSL }),
+                entryPoint: 'vs',
+                buffers: [{
+                    arrayStride: 28, // p(8) + pr(8) + nx(8) + side(4)
+                    attributes: [
+                        { format: 'float32x2', offset: 0,  shaderLocation: 0 }, // aPos
+                        { format: 'float32x2', offset: 8,  shaderLocation: 1 }, // aPrev
+                        { format: 'float32x2', offset: 16, shaderLocation: 2 }, // aNext
+                        { format: 'float32',   offset: 24, shaderLocation: 3 }, // aSide
+                    ]
+                }]
+            },
+            fragment: {
+                module: device.createShaderModule({ code: FAST_LINE_WGSL }),
+                entryPoint: 'fs',
+                targets: [{
+                    format: presentationFormat,
+                    blend: {
+                        color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+                        alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'add' }
+                    }
+                }]
+            },
+            primitive: { topology: 'triangle-list' }
+        });
+    }
+}
+
+export function drawFastLines(pass, lineItems, overrideColor) {
+    if (lineItems.length === 0) return;
+    ensureFastLinePipeline();
+    pass.setPipeline(fastLinePipeline);
+
+    for (const p of lineItems) {
+        const uBuf = new Float32Array(16);
+        uBuf[0] = p.uOpacity ?? 1.0;
+        uBuf[1] = p.uThickness ?? 1.0;
+        uBuf[2] = p.uTranslate[0]; uBuf[3] = p.uTranslate[1];
+        uBuf[4] = p.uScale;
+        uBuf[5] = p.uIsOrtho ? 1.0 : 0.0;
+        uBuf[6] = p.uResolution[0]; uBuf[7] = p.uResolution[1];
+        uBuf[8] = (p.uRotate ? p.uRotate[0] : 0); uBuf[9] = (p.uRotate ? p.uRotate[1] : 0);
+        
+        const col = overrideColor || p.uColor || [1, 1, 1];
+        uBuf[12] = col[0]; uBuf[13] = col[1]; uBuf[14] = col[2];
+
+        const dynOffset = allocSlot(uBuf);
+        pass.setBindGroup(0, polyBG_Uniforms, [dynOffset]); 
+        pass.setVertexBuffer(0, p.lineVertexBuffer._gpuBuffer);
+        
+        if (p.elements) {
+            pass.setIndexBuffer(p.elements._gpuBuffer, 'uint32');
+            pass.drawIndexed(p.elements._indexCount);
+        } else {
+            pass.draw(p.count);
+        }
     }
 }

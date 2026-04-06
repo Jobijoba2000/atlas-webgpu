@@ -20,8 +20,11 @@ export const mapState = {
     // Features globales (utilisé pour rebuildGeometry)
     globalFeatures: [],
 
-    // Mapping pour le picking WebGPU
+    // Mapping pour le picking WebGPU et les métadonnées de rendu
     pickIdToIso: new Map(),
     isoToPickId: new Map(),
+    featureMeta: new Map(),
+    atlasPolygons: null, // Référence O(1)
+    atlasLines: null,    // Référence O(1)
     nextPickId: 1
 };

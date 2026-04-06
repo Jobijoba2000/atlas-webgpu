@@ -14,8 +14,9 @@ dist-ssr
 
 # Data
 public/data/binary/
+data/custom_geojson/
 *.bin
-# *.geojson
+*.geojson
 *.csv
 *.sqlite
 

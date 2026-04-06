@@ -16,7 +16,8 @@ class AppState {
         // Map short URL params to config keys
         const paramMap = {
             'res': 'resolution',
-            'proj': 'projection'
+            'proj': 'projection',
+            'map': 'customMap'
         };
 
         for (const [param, key] of Object.entries(paramMap)) {
@@ -42,18 +43,20 @@ class AppState {
     }
 
     syncToUrl() {
-        const urlParams = new URLSearchParams(window.location.search);
+        const urlParams = new URLSearchParams();
 
-        // Only sync a subset of "peristable" keys to keep URL clean
-        const persistable = {
-            'projection': 'proj',
-            'resolution': 'res'
-        };
-
-        for (const [key, param] of Object.entries(persistable)) {
-            const val = this.config[key];
-            if (val !== undefined) {
-                urlParams.set(param, val);
+        if (this.config.customMap) {
+            urlParams.set('map', this.config.customMap);
+        } else {
+            const persistable = {
+                'projection': 'proj',
+                'resolution': 'res'
+            };
+            for (const [key, param] of Object.entries(persistable)) {
+                const val = this.config[key];
+                if (val !== undefined) {
+                    urlParams.set(param, val);
+                }
             }
         }
 
@@ -70,8 +73,12 @@ class AppState {
             this.config[key] = value;
 
             // Sync to URL if it's a persistable property
-            const persistable = ['projection', 'resolution'];
+            const persistable = ['projection', 'resolution', 'customMap'];
             if (persistable.includes(key)) {
+                // If we set a standard param while on a custom map, we reset the custom map
+                if (key !== 'customMap' && this.config.customMap) {
+                    this.config.customMap = null;
+                }
                 this.syncToUrl();
             }
 
@@ -82,7 +89,7 @@ class AppState {
     updateMultiple(newSettings) {
         let changed = false;
         let pChanged = false;
-        const persistable = ['projection', 'resolution'];
+        const persistable = ['projection', 'resolution', 'customMap'];
 
         for (const [key, value] of Object.entries(newSettings)) {
             if (this.config[key] !== value) {

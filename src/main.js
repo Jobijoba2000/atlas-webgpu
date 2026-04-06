@@ -6,6 +6,7 @@ import { createFontAtlas } from './render/fontAtlas.js';
 import { appState } from './state/appState.js';
 import { mapState } from './state/mapState.js';
 import { Sidebar } from './ui/Sidebar.js';
+import { MapsPanel } from './ui/MapsPanel.js';
 import { setupInteractions } from './core/interactions.js';
 import { createRenderer } from './render/mapRenderer.js';
 import { setupDataLoaders } from './data/dataLoaders.js';
@@ -42,14 +43,32 @@ async function startApp() {
     redraw
   });
 
+  new MapsPanel(loaders);
+
+  // Initial custom map load from URL (F5 support)
+  const initialMap = appState.get('customMap'); // ex: test_monde_lonlat.bin
+  if (initialMap) {
+    document.body.classList.add('custom-map-active');
+    loaders.loadCustomMapData(`data/custom_bin/${initialMap}`);
+  } else {
+    loaders.loadGlobalData();
+  }
+
   appState.subscribe((state, key, value) => {
     switch (key) {
-      case 'projection': setProjection(value); break;
+      case 'projection': 
+        setProjection(value); 
+        if (!appState.get('customMap')) {
+          loaders.loadGlobalData();
+        }
+        break;
       case 'resolution':
       case 'countrySaturation':
       case 'countryLightness':
       case 'mapBackgroundColor':
-        loaders.loadGlobalData();
+        if (!appState.get('customMap')) {
+          loaders.loadGlobalData();
+        }
         break;
     }
     redraw();
@@ -62,7 +81,12 @@ async function startApp() {
   });
 
   setRedrawCallback(redraw);
-  setRebuildCallback(() => loaders.loadGlobalData());
+  setRebuildCallback(() => {
+    if (!appState.get('customMap')) {
+        loaders.loadGlobalData();
+    }
+  });
+
   initCamera();
 
   // Premier chargement

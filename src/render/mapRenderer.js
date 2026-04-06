@@ -1,6 +1,6 @@
 import { width, height, gpuContext, device } from '../core/gpuContext.js';
 import { zoomState, isOrthographic, orthoRotate } from '../core/camera.js';
-import { drawPolygons, drawThickLines, drawTextFull, drawThickCircle, resetUniformRing, drawPickingPolygons } from './shaders.js';
+import { drawPolygons, drawFastLines, drawTextFull, drawThickCircle, resetUniformRing, drawPickingPolygons } from './shaders.js';
 import { buffer as gpuBuffer } from './gpu.js';
 import { appState } from '../state/appState.js';
 import { mapState } from '../state/mapState.js';
@@ -85,141 +85,127 @@ export function createRenderer(deps) {
             const dynamicThickness = 1.0 * Math.pow(Math.min(zoomState.k, 2000), 0.256);
             const gratThickness = 1.2 * Math.pow(Math.min(zoomState.k, 150), 0.23);
 
-        const loadedRegions = getLoadedRegions();
-        const isAnyLoaded = loadedRegions.size > 0;
-        const exclusiveMode = getExclusiveFocusMode();
-        const showStrokes = appState.get('showStrokes');
-        const showLabels = appState.get('showLabels');
-        const showColors = appState.get('showColors');
+            const loadedRegions = getLoadedRegions();
+            const isAnyLoaded = loadedRegions.size > 0;
+            const exclusiveMode = getExclusiveFocusMode();
+            const showStrokes = appState.get('showStrokes');
+            const showLabels = appState.get('showLabels');
+            const showColors = appState.get('showColors');
 
-        const baseProps = {
-            uTranslate, uScale,
-            uResolution: [width, height],
-            uRotate: orthoRotate,
-            uIsOrtho: isOrthographic,
-            uOpacity: 1.0
-        };
+            const baseProps = {
+                uTranslate, uScale,
+                uResolution: [width, height],
+                uRotate: orthoRotate,
+                uIsOrtho: isOrthographic,
+                uOpacity: 1.0
+            };
 
-        const bgTri = [], fgTri = [], bgLines = [], fgLines = [];
+            const bgTri = [], fgTri = [], bgLines = [], fgLines = [];
 
-        const renderList = getRenderList();
-        const atlasItem = renderList.find(item => item.isAtlas);
+            // ACCÈS DIRECT AU BATCH GLOBAL (O(1))
+            const atlasPolygons = mapState.atlasPolygons;
+            const atlasLines = mapState.atlasLines;
 
-        renderList.forEach(item => {
-            if (item.isRegion && !loadedRegions.has(item.parentIso)) return;
-
-            let itemOpacity = 1.0;
-            if (item.isAtlas) {
-                itemOpacity = exclusiveMode ? 0.4 : 1.0;
-            } else if (!item.isRegion && isAnyLoaded) {
-                const focused = loadedRegions.has(item.id) || (item.feature && loadedRegions.has(item.feature.iso));
-                itemOpacity = exclusiveMode ? (focused ? 1.0 : 0.0) : (focused ? 1.0 : 0.4);
+            if (atlasPolygons) {
+                const itemOpacity = exclusiveMode ? 0.4 : 1.0;
+                bgTri.push({ ...baseProps, ...atlasPolygons, uOpacity: itemOpacity });
             }
 
-            if (item.isAtlas) {
-                bgTri.push({ ...baseProps, pos: item.pos, colors: item.colors, count: item.count, uOpacity: itemOpacity, isAtlas: true });
-            } else if (item.isReference) {
-                const focused = loadedRegions.has(item.iso);
-                if (focused) {
-                    fgTri.push({ ...baseProps, pos: atlasItem.pos, colors: atlasItem.colors, count: item.atlasCount, offset: item.atlasOffset, uOpacity: 1.0, forceDraw: true });
-                }
-            } else {
-                // Legacy regions or others
-                const tData = {
-                    ...baseProps,
-                    pos: item.pos, colors: item.colors, pickColors: item.pickColors, count: item.count, uOpacity: itemOpacity,
-                    isAtlas: item.isAtlas, forceDraw: item.forceDraw || (item.isRegion && loadedRegions.has(item.id))
-                };
-                if (item.isRegion) fgTri.push(tData); else bgTri.push(tData);
+            if (atlasLines && showStrokes) {
+                const itemOpacity = exclusiveMode ? 0.2 : 1.0;
+                bgLines.push({ ...baseProps, ...atlasLines, uOpacity: itemOpacity, uThickness: dynamicThickness, uColor: strokeColor });
             }
 
-            if (item.lineVertexBuffer && item.elements) {
-                const lData = {
-                    ...baseProps,
-                    lineVertexBuffer: item.lineVertexBuffer, lineColors: item.lineColors, elements: item.elements,
-                    uThickness: dynamicThickness, uColor: strokeColor, uOpacity: (item.isRegion && exclusiveMode) ? 1.0 : Math.max(0.2, itemOpacity),
-                    isAtlasLines: item.isAtlasLines, forceDraw: item.forceDraw
-                };
-                if (item.isRegion) fgLines.push(lData); else bgLines.push(lData);
-            }
-        });
-
-        const graticuleData = getGraticuleRenderData();
-        const bgRenderData = getBgRenderData();
-        const outlineHorizontal = getOutlineHorizontalData();
-        const outlineVertical = getOutlineVerticalData();
-
-        const encoder = device.createCommandEncoder({ label: 'frame' });
-        const view = gpuContext.getCurrentTexture().createView();
-        const pass = encoder.beginRenderPass({
-            colorAttachments: [{ view, clearValue: { r: 0, g: 0, b: 0, a: 1 }, loadOp: 'clear', storeOp: 'store' }],
-        });
-
-        const mkProps = (extra = {}) => ({ ...baseProps, ...extra });
-
-        // ── Globe circle ──
-        if (isOrthographic) {
-            drawThickCircle(pass, mkProps({
-                circleVertexBuffer, count: circleCount,
-                uRadius: 120.0 * zoomState.k, uThickness: dynamicThickness * 2.0,
-                uCenter: [width / 2, height / 2],
-                uColor: outlineColor, uOpacity: 1.0
-            }));
-        }
-
-        const drawElements = (triList, lineList, overrideColor) => {
-            if (triList.length > 0 && showColors) drawPolygons(pass, triList.map(t => mkProps(t)));
-            if (lineList.length > 0 && showStrokes) drawThickLines(pass, lineList.map(l => mkProps({ ...l, uColor: overrideColor || l.uColor || strokeColor })));
-        };
-
-        if (bgRenderData && !isOrthographic && showColors) drawPolygons(pass, [mkProps(bgRenderData)]);
-
-        if (graticulesEnabled && graticuleData) {
-            drawThickLines(pass, [mkProps({ ...graticuleData, uThickness: gratThickness, uColor: gratColor, uOpacity: gratOpacityParam })]);
-        }
-
-        if (!isOrthographic) {
-            if (outlineHorizontal) drawThickLines(pass, [mkProps({ ...outlineHorizontal, uThickness: dynamicThickness * 2.0, uColor: outlineColor, uOpacity: 1.0 })]);
-            if (outlineVertical) drawThickLines(pass, [mkProps({ ...outlineVertical, uThickness: dynamicThickness * 2.0, uColor: outlineColor, uOpacity: 1.0 })]);
-        }
-
-        drawElements(bgTri, bgLines, null);
-        drawElements(fgTri, fgLines, null);
-
-        if (showLabels) {
-            const textRenderList = getTextRenderList();
-            const activeText = [];
-            textRenderList.forEach(item => {
-                if (item.isRegion && !loadedRegions.has(item.parentIso)) return;
-                let labelOpacity = 1.0;
-                if (!item.isRegion && isAnyLoaded) {
-                    const focused = loadedRegions.has(item.iso);
-                    labelOpacity = exclusiveMode ? (focused ? 1.0 : 0.0) : (focused ? 0.2 : 0.4);
-                }
-                if (item.uPositions && item.count > 0) {
-                    const projId = appState.get('projection');
-                    const textScale = getProjectionTextScale(projId, isOrthographic, item.uAnchor);
-                    activeText.push(mkProps({
-                        uPositions: item.uPositions,
-                        uUvs: item.uUvs,
-                        uAnchor: item.uAnchor,
-                        uAnchorLL: item.uAnchorLL,
-                        uFontAtlas: fontAtlas.texture,
-                        uColor: labelColor,
-                        uHaloColor: labelHaloColor,
-                        uHaloThick: labelHaloThick,
-                        uAtlasSize: [fontAtlas.texSize, fontAtlas.texSize],
-                        uSize: item.uSize * textScale,
-                        uOpacity: labelOpacity,
-                        count: item.count,
-                    }));
+            // On n'ajoute en surbrillance (Foreground) QUE les régions réellement chargées/sélectionnées
+            loadedRegions.forEach(iso => {
+                const meta = mapState.featureMeta.get(iso);
+                if (meta && atlasPolygons) {
+                    fgTri.push({
+                        ...baseProps,
+                        pos: atlasPolygons.pos,
+                        colors: atlasPolygons.colors,
+                        count: meta.atlasCount,
+                        offset: meta.atlasOffset,
+                        uOpacity: 1.0,
+                        forceDraw: true
+                    });
                 }
             });
-            if (activeText.length > 0) drawTextFull(pass, activeText);
-        }
 
-        pass.end();
-        device.queue.submit([encoder.finish()]);
+            const graticuleData = getGraticuleRenderData();
+            const bgRenderData = getBgRenderData();
+            const outlineHorizontal = getOutlineHorizontalData();
+            const outlineVertical = getOutlineVerticalData();
+
+            const encoder = device.createCommandEncoder({ label: 'frame' });
+            const view = gpuContext.getCurrentTexture().createView();
+            const pass = encoder.beginRenderPass({
+                colorAttachments: [{ view, clearValue: { r: 0, g: 0, b: 0, a: 1 }, loadOp: 'clear', storeOp: 'store' }],
+            });
+
+            const mkProps = (extra = {}) => ({ ...baseProps, ...extra });
+
+            // ── Globe circle ──
+            if (isOrthographic) {
+                drawThickCircle(pass, mkProps({
+                    circleVertexBuffer, count: circleCount,
+                    uRadius: 120.0 * zoomState.k, uThickness: dynamicThickness * 2.0,
+                    uCenter: [width / 2, height / 2],
+                    uColor: outlineColor, uOpacity: 1.0
+                }));
+            }
+
+            const drawElements = (triList, lineList, overrideColor) => {
+                if (triList.length > 0 && showColors) drawPolygons(pass, triList);
+                if (lineList.length > 0 && showStrokes) drawFastLines(pass, lineList, overrideColor);
+            };
+
+            if (bgRenderData && !isOrthographic && showColors) drawPolygons(pass, [mkProps(bgRenderData)]);
+            if (graticulesEnabled && graticuleData) {
+                drawThickLines(pass, [mkProps({ ...graticuleData, uThickness: gratThickness, uColor: gratColor, uOpacity: gratOpacityParam })]);
+            }
+            if (!isOrthographic) {
+                if (outlineHorizontal) drawThickLines(pass, [mkProps({ ...outlineHorizontal, uThickness: dynamicThickness * 2.0, uColor: outlineColor, uOpacity: 1.0 })]);
+                if (outlineVertical) drawThickLines(pass, [mkProps({ ...outlineVertical, uThickness: dynamicThickness * 2.0, uColor: outlineColor, uOpacity: 1.0 })]);
+            }
+
+            drawElements(bgTri, bgLines, null);
+            drawElements(fgTri, fgLines, null);
+
+            if (showLabels) {
+                const textRenderList = getTextRenderList();
+                const activeText = [];
+                textRenderList.forEach(item => {
+                    if (item.isRegion && !loadedRegions.has(item.parentIso)) return;
+                    let labelOpacity = 1.0;
+                    if (!item.isRegion && isAnyLoaded) {
+                        const focused = loadedRegions.has(item.iso);
+                        labelOpacity = exclusiveMode ? (focused ? 1.0 : 0.0) : (focused ? 0.2 : 0.4);
+                    }
+                    if (item.uPositions && item.count > 0) {
+                        const projId = appState.get('projection');
+                        const textScale = getProjectionTextScale(projId, isOrthographic, item.uAnchor);
+                        activeText.push(mkProps({
+                            uPositions: item.uPositions,
+                            uUvs: item.uUvs,
+                            uAnchor: item.uAnchor,
+                            uAnchorLL: item.uAnchorLL,
+                            uFontAtlas: fontAtlas.texture,
+                            uColor: labelColor,
+                            uHaloColor: labelHaloColor,
+                            uHaloThick: labelHaloThick,
+                            uAtlasSize: [fontAtlas.texSize, fontAtlas.texSize],
+                            uSize: item.uSize * textScale,
+                            uOpacity: labelOpacity,
+                            count: item.count,
+                        }));
+                    }
+                });
+                if (activeText.length > 0) drawTextFull(pass, activeText);
+            }
+
+            pass.end();
+            device.queue.submit([encoder.finish()]);
         },
 
         doPicking: async function doPicking(clientX, clientY) {
@@ -238,31 +224,27 @@ export function createRenderer(deps) {
             const fgTri = [], bgTri = [];
 
             getRenderList().forEach(item => {
-                if (item.isRegion && !loadedRegions.has(item.parentIso)) return;
-                if (!item.uPickColor && !item.isAtlas) return;
-                const tData = {
-                    pos: item.pos,
-                    count: item.count,
-                    uPickColor: item.uPickColor,
-                    pickColors: item.pickColors,
-                    isAtlas: item.isAtlas,
-                    uTranslate, uScale,
-                    uResolution: [width, height],
-                    uRotate: orthoRotate,
-                    uIsOrtho: isOrthographic
-                };
-                if (item.isRegion) fgTri.push(tData); else bgTri.push(tData);
+                if (item.isAtlas) {
+                    bgTri.push({
+                        ...baseProps,
+                        ...item,
+                        uTranslate, uScale,
+                        uResolution: [width, height],
+                        uRotate: orthoRotate,
+                        uIsOrtho: isOrthographic
+                    });
+                }
             });
 
             const encoder = device.createCommandEncoder({ label: 'picking frame' });
-            
+
             // On ne rend que dans un VIEWPORT 1x1 pour économiser les pixels
             const pass = encoder.beginRenderPass({
                 colorAttachments: [{ view: pickingTexture.createView(), clearValue: { r: 0, g: 0, b: 0, a: 0 }, loadOp: 'clear', storeOp: 'store' }],
             });
 
             // Optimisation: utiliser setScissorRect ou juste rendre et copier 1 pixel
-            
+
             drawPickingPolygons(pass, bgTri);
             drawPickingPolygons(pass, fgTri);
 
@@ -279,7 +261,7 @@ export function createRenderer(deps) {
             await pickingReadBuffer.mapAsync(GPUMapMode.READ);
             const arrayBuffer = pickingReadBuffer.getMappedRange();
             const pixels = new Uint8Array(arrayBuffer);
-            
+
             // bgra8unorm: B, G, R, A
             const r = pixels[2];
             const g = pixels[1];

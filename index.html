@@ -647,7 +647,50 @@
             box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
             text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
         }
-    </style>
+    /* Mode Custom Map : Masquer le bas standard et montrer le bouton Reset */
+    body.custom-map-active #projection-selector,
+    body.custom-map-active #resolution-selector {
+        display: none !important;
+    }
+    #custom-bottom-bar {
+        display: none;
+        position: fixed;
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1000;
+        pointer-events: auto;
+    }
+    body.custom-map-active #custom-bottom-bar {
+        display: flex;
+    }
+    .reset-btn {
+        background: rgba(255, 59, 48, 0.8);
+        border: 2px solid white;
+        color: white;
+        padding: 15px 40px;
+        border-radius: 40px;
+        font-weight: 900;
+        font-size: 16px;
+        cursor: pointer;
+        backdrop-filter: blur(20px);
+        transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        box-shadow: 0 10px 30px rgba(255, 59, 48, 0.4);
+    }
+    .reset-btn:hover {
+        background: #FF3B30;
+        transform: translate(-50%, -5px) scale(1.05);
+    }
+    /* Correction du survol car il est décentré par défaut avec translateX */
+    body.custom-map-active #custom-bottom-bar {
+        transform: translateX(-50%);
+    }
+    .reset-btn:hover {
+        transform: scale(1.05) translateY(-5px);
+    }
+</style>
 </head>
 
 <body>
@@ -656,10 +699,25 @@
 
     <button id="settings-trigger" title="Paramètres de la carte">
         <svg fill="currentColor" width="24" height="24" viewBox="0 0 24 24">
-            <path
-                d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.81,11.69,4.81,12c0,0.31,0.02,0.65,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z" />
+            <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.81,11.69,4.81,12c0,0.31,0.02,0.65,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z" />
         </svg>
     </button>
+
+    <button id="maps-trigger" title="Mes Cartes Personnalisées" style="position: fixed; top: 20px; right: 20px; width: 54px; height: 54px; z-index: 100; background: rgba(10, 132, 255, 0.4); border: 1px solid rgba(10, 132, 255, 0.5); color: white; border-radius: 50%; cursor: pointer; backdrop-filter: blur(10px); transition: all 0.3s ease; display: flex; align-items: center; justify-content: center;">
+        <svg fill="currentColor" width="30" height="30" viewBox="0 0 24 24">
+            <path d="M20.5,3l-1.45,1.53c-0.34,0.36-0.89,0.45-1.33,0.23L15.3,3.54C14.88,3.33,14.39,3.36,14,3.63L10,6.63L5.3,3.54 C4.88,3.26,4.34,3.26,3.92,3.54L1.92,4.86c-0.42,0.28-0.67,0.75-0.67,1.26V21c0,0.41,0.25,0.79,0.64,0.94 c0.38,0.16,0.83,0.07,1.12-0.23L4.5,20.18c0.34-0.36,0.89-0.45,1.33-0.23l2.42,1.21c0.42,0.21,0.91,0.18,1.31-0.09L14,18h0l0,0l4,3 h0l0,0c0.34,0.26,0.8,0.29,1.17,0.11c0.37-0.18,0.61-0.57,0.61-0.98V6l1.62,1.08C21.8,7.35,22.25,7.35,22.64,7.08 c0.39-0.27,0.63-0.73,0.63-1.22l0-1.5c0-0.49-0.24-0.95-0.64-1.22l-1.25-0.83C21.13,2.15,20.76,2.15,20.5,2.4L20.5,3z M15,19.31 l-1-0.75V5.44l1-0.75V19.31z M10,18.56l-1,0.75V6.19l1-0.75V18.56z M5,18.56l-1,0.75V6.19l1-0.75V18.56z M19,17.81l-1-0.75V4.69 l1-0.75V17.81z" />
+        </svg>
+    </button>
+
+    <div id="maps-panel" style="position: fixed; top: 85px; right: 20px; width: 280px; background: rgba(15, 15, 15, 0.85); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; color: white; z-index: 1000; padding: 20px; opacity: 0; pointer-events: none; transform: translateY(-10px); transition: all 0.3s ease; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;">
+            <h3 style="margin: 0; font-size: 16px; font-weight: 500;">Mes Cartes</h3>
+            <span id="close-maps" style="cursor: pointer; opacity: 0.6; font-size: 20px;">&times;</span>
+        </div>
+        <div id="maps-list" style="max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+            <div style="font-size: 12px; opacity: 0.5; text-align: center; padding: 20px;">Aucune carte personnalisée générée.</div>
+        </div>
+    </div>
 
     <!-- Settings Sidebar -->
     <div id="settings-sidebar">
@@ -866,6 +924,10 @@
     <canvas id="webgpu-layer"></canvas>
     <canvas id="text-layer"></canvas>
 
+
+    <div id="custom-bottom-bar">
+        <button class="reset-btn" id="reset-map">← REVENIR À LA CARTE MONDIALE</button>
+    </div>
 
     <script type="module" src="/src/main.js"></script>
 </body>

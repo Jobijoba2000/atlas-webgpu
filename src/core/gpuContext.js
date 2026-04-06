@@ -27,7 +27,18 @@ export async function initGPU() {
     const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
     if (!adapter) throw new Error('Aucun adaptateur WebGPU trouvé.');
 
-    device = await adapter.requestDevice({ label: 'WorldMap GPU Device' });
+    const requiredLimits = {};
+    if (adapter.limits.maxBufferSize > 268435456) {
+        requiredLimits.maxBufferSize = adapter.limits.maxBufferSize;
+    }
+    if (adapter.limits.maxStorageBufferBindingSize > 268435456) {
+        requiredLimits.maxStorageBufferBindingSize = adapter.limits.maxStorageBufferBindingSize;
+    }
+
+    device = await adapter.requestDevice({ 
+        label: 'WorldMap GPU Device',
+        requiredLimits
+    });
     device.lost.then(info => console.error(`GPU perdu: ${info.message}`));
 
     gpuContext = gpuCanvas.getContext('webgpu');

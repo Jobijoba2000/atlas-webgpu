@@ -49,6 +49,14 @@ export const PROJECTIONS = [
     defaultScale: 120,
     clampLat: 89.9,
     initialZoom: 1.0
+  },
+  {
+    id: 'lonlat',
+    name: 'Plate Carrée (Lon/Lat)',
+    project: (scale = 120) => d3.geoIdentity().reflectY(true).scale(scale / 120 * (180 / Math.PI)).translate([0, 0]),
+    defaultScale: 120,
+    clampLat: 90.0,
+    initialZoom: 1.0
   }
 ];
 

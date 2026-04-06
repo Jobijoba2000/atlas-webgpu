@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import fs from 'fs';
+import path from 'path';
 import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
 
 const app = express();
@@ -7,6 +9,15 @@ app.use(cors());
 app.use(express.json());
 
 const tts = new MsEdgeTTS();
+
+// Nouveau endpoint pour lister les cartes sans manifest
+app.get('/api/custom-maps', (req, res) => {
+    const dir = path.join(process.cwd(), 'public/data/custom_bin');
+    if (!fs.existsSync(dir)) return res.json([]);
+    
+    const files = fs.readdirSync(dir).filter(f => f.endsWith('.bin'));
+    res.json(files);
+});
 
 app.get('/api/tts', async (req, res) => {
     try {

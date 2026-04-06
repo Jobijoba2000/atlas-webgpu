@@ -273,17 +273,49 @@ function packFile(processed, outputFilename, projId) {
 
     let totalPathVerts = 0;
     processed.linePaths.forEach(p => totalPathVerts += p.length);
-    const linePathInds = new Uint32Array(totalPathVerts);
-    const linePathStarts = new Uint32Array(processed.linePaths.length);
+    const lpIndArr = new Uint32Array(totalPathVerts);
+    const lpPrArr = new Int16Array(totalPathVerts * 2);
+    const lpNxArr = new Int16Array(totalPathVerts * 2);
+    const lpStartArr = new Uint32Array(processed.linePaths.length);
+
     let currP = 0;
+    const SCALE = 1e5;
+
     processed.linePaths.forEach((path, i) => {
-        linePathStarts[i] = currP;
-        linePathInds.set(path, currP);
-        currP += path.length;
+        lpStartArr[i] = currP;
+        const N = path.length;
+        const isClosed = (path[0] === path[N - 1] && N > 2);
+
+        for (let j = 0; j < N; j++) {
+            const currIdx = path[j];
+            lpIndArr[currP + j] = currIdx;
+
+            const pX = processed.vm.vertices[currIdx * 2];
+            const pY = processed.vm.vertices[currIdx * 2 + 1];
+
+            let prIdx = j > 0 ? path[j - 1] : (isClosed ? path[N - 2] : path[0]);
+            let nxIdx = j < N - 1 ? path[j + 1] : (isClosed ? path[1] : path[N - 1]);
+
+            const prX = processed.vm.vertices[prIdx * 2];
+            const prY = processed.vm.vertices[prIdx * 2 + 1];
+            const nxX = processed.vm.vertices[nxIdx * 2];
+            const nxY = processed.vm.vertices[nxIdx * 2 + 1];
+
+            const writeOffset = (arr, baseIdx, dx, dy) => {
+                arr[baseIdx * 2] = Math.max(-32767, Math.min(32767, Math.round(dx * SCALE)));
+                arr[baseIdx * 2 + 1] = Math.max(-32767, Math.min(32767, Math.round(dy * SCALE)));
+            };
+
+            writeOffset(lpPrArr, currP + j, prX - pX, prY - pY);
+            writeOffset(lpNxArr, currP + j, nxX - pX, nxY - pY);
+        }
+        currP += N;
     });
 
-    const lpIndBuf = Buffer.from(linePathInds.buffer);
-    const lpStartBuf = Buffer.from(linePathStarts.buffer);
+    const lpIndBuf = Buffer.from(lpIndArr.buffer);
+    const lpPrBuf = Buffer.from(lpPrArr.buffer);
+    const lpNxBuf = Buffer.from(lpNxArr.buffer);
+    const lpStartBuf = Buffer.from(lpStartArr.buffer);
 
     const pad = (buf) => {
         const len = buf.length;
@@ -305,12 +337,14 @@ function packFile(processed, outputFilename, projId) {
         polyCount: totalPoints,
         polyIndexCount: processed.polyIndices.length,
         pathCount: processed.linePaths.length,
-        pathIndexCount: linePathInds.length,
+        pathIndexCount: lpIndArr.length,
         offsets: {
             polyPos: 0,
             polyIndices: polyPosBuf.length,
             lpInd: polyPosBuf.length + polyIndBuf.length,
-            lpStart: polyPosBuf.length + polyIndBuf.length + lpIndBuf.length
+            lpPr: polyPosBuf.length + polyIndBuf.length + lpIndBuf.length,
+            lpNx: polyPosBuf.length + polyIndBuf.length + lpIndBuf.length + lpPrBuf.length,
+            lpStart: polyPosBuf.length + polyIndBuf.length + lpIndBuf.length + lpPrBuf.length + lpNxBuf.length
         }
     };
 
@@ -325,6 +359,8 @@ function packFile(processed, outputFilename, projId) {
         polyPosBuf,
         polyIndBuf,
         lpIndBuf,
+        lpPrBuf,
+        lpNxBuf,
         lpStartBuf
     ]);
 

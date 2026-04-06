@@ -34,13 +34,13 @@ export const zoomState = { x: 0, y: 0, k: 1 };
 export function setProjection(projId) {
     stopAutoRotation();
     isOrthographic = projId === 'orthographic';
-    
+
     // Set initial zoom based on projection config
     const projConfig = getProjectionById(projId);
-    zoomState.x = 0; 
-    zoomState.y = 0; 
+    zoomState.x = 0;
+    zoomState.y = 0;
     zoomState.k = projConfig.initialZoom || 1.0;
-    
+
     d3.select(webglCanvas).property("__zoom", d3.zoomIdentity.scale(zoomState.k));
     requestRebuild();
 }
@@ -72,9 +72,10 @@ function dragged(event) {
     stopAutoRotation();
     if (isOrthographic) {
         const latRad = orthoRotate[1] * Math.PI / 180;
-        const sens = 0.3 / (zoomState.k * Math.max(0.1, Math.cos(latRad)));
+        const sensBase = (180 / Math.PI) / 120; // 0.47746... pour un rayon de 120px
+        const sens = sensBase / (zoomState.k * Math.max(0.1, Math.cos(latRad)));
         orthoRotate[0] -= event.dx * sens;
-        orthoRotate[1] = Math.max(-90, Math.min(90, orthoRotate[1] + event.dy * (0.3 / zoomState.k)));
+        orthoRotate[1] = Math.max(-90, Math.min(90, orthoRotate[1] + event.dy * (sensBase / zoomState.k)));
         requestRedraw();
     } else {
         zoomState.x += event.dx;
