@@ -51,7 +51,7 @@ struct Uniforms {
     uIsOrtho      : f32,
     uResolution   : vec2f,
     uRotate       : vec2f,
-    _pad0         : vec2f,
+    uSinCosRota   : vec4f, // sin(rLon), cos(rLon), sin(rLat), cos(rLat)
     uColor        : vec3f,
     _pad1         : f32,
 };
@@ -77,11 +77,15 @@ const PI = 3.14159265358979323846f;
 
     if (u.uIsOrtho > 0.5) {
         let lon = i.aPos.x * PI/180.0; let lat = i.aPos.y * PI/180.0;
-        let rLon = u.uRotate.x * PI/180.0; let rLat = u.uRotate.y * PI/180.0;
-        let dl = lon - rLon;
-        let xr = cos(lat)*sin(dl);
-        let yr = cos(rLat)*sin(lat) - sin(rLat)*cos(lat)*cos(dl);
-        let zr = sin(rLat)*sin(lat) + cos(rLat)*cos(lat)*cos(dl);
+        let sLon = sin(lon); let cLon = cos(lon);
+        let sLat = sin(lat); let cLat = cos(lat);
+        let rS = u.uSinCosRota.x; let rC = u.uSinCosRota.y;
+        let rSL = u.uSinCosRota.z; let rCL = u.uSinCosRota.w;
+
+        let xr = cLat * (sLon * rC - cLon * rS);
+        let yr = rCL * sLat - rSL * cLat * (cLon * rC + sLon * rS);
+        let zr = rSL * sLat + rCL * cLat * (cLon * rC + sLon * rS);
+
         let pxO = vec2f(120.0*xr, -120.0*yr) * u.uScale + u.uTranslate + center;
         var clipO = (pxO / u.uResolution) * 2.0 - 1.0; clipO.y = -clipO.y;
         o.pos = vec4f(clipO, 0.0, 1.0);
@@ -109,17 +113,17 @@ const POLY_VB_LAYOUTS = [
 let polyPipeline = null;
 let polyBG_Uniforms = null;
 let uniformBGL = null;
-const polyUniformBuf = new Float32Array(16); // 64 octets
+const polyUniformBuf = new Float32Array(20); // 80 octets
 
 function ensureUniformBGL() {
     if (uniformBGL) return;
     ensureRingBuffer();
     uniformBGL = device.createBindGroupLayout({
-        entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform', hasDynamicOffset: true, minBindingSize: 64 } }],
+        entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform', hasDynamicOffset: true, minBindingSize: 80 } }],
     });
     polyBG_Uniforms = device.createBindGroup({
         layout: uniformBGL,
-        entries: [{ binding: 0, resource: { buffer: uniformRingBuffer, size: 64 } }]
+        entries: [{ binding: 0, resource: { buffer: uniformRingBuffer, size: 80 } }]
     });
 }
 
@@ -150,7 +154,11 @@ export function drawPolygons(pass, items) {
         polyUniformBuf[5] = p.uIsOrtho ? 1.0 : 0.0;
         polyUniformBuf[6] = p.uResolution[0]; polyUniformBuf[7] = p.uResolution[1];
         polyUniformBuf[8] = p.uRotate[0]; polyUniformBuf[9] = p.uRotate[1];
-        polyUniformBuf[12] = 1.0; polyUniformBuf[13] = 1.0; polyUniformBuf[14] = 1.0; // Color blanc par défaut
+        if (p.uSinCosRota) {
+            polyUniformBuf[12] = p.uSinCosRota[0]; polyUniformBuf[13] = p.uSinCosRota[1];
+            polyUniformBuf[14] = p.uSinCosRota[2]; polyUniformBuf[15] = p.uSinCosRota[3];
+        }
+        polyUniformBuf[16] = 1.0; polyUniformBuf[17] = 1.0; polyUniformBuf[18] = 1.0; // Color blanc par défaut
         const dynOffset = allocSlot(polyUniformBuf);
         pass.setBindGroup(0, polyBG_Uniforms, [dynOffset]);
         pass.setVertexBuffer(0, p.pos._gpuBuffer);
@@ -174,7 +182,7 @@ struct Uniforms {
     uIsOrtho      : f32,
     uResolution   : vec2f,
     uRotate       : vec2f,
-    _pad0         : vec2f,
+    uSinCosRota   : vec4f, 
     uColor        : vec3f,
     _pad1         : f32,
 };
@@ -200,11 +208,15 @@ const PI = 3.14159265358979323846f;
 
     if (u.uIsOrtho > 0.5) {
         let lon = i.aPos.x * PI/180.0; let lat = i.aPos.y * PI/180.0;
-        let rLon = u.uRotate.x * PI/180.0; let rLat = u.uRotate.y * PI/180.0;
-        let dl = lon - rLon;
-        let xr = cos(lat)*sin(dl);
-        let yr = cos(rLat)*sin(lat) - sin(rLat)*cos(lat)*cos(dl);
-        let zr = sin(rLat)*sin(lat) + cos(rLat)*cos(lat)*cos(dl);
+        let sLon = sin(lon); let cLon = cos(lon);
+        let sLat = sin(lat); let cLat = cos(lat);
+        let rS = u.uSinCosRota.x; let rC = u.uSinCosRota.y;
+        let rSL = u.uSinCosRota.z; let rCL = u.uSinCosRota.w;
+
+        let xr = cLat * (sLon * rC - cLon * rS);
+        let yr = rCL * sLat - rSL * cLat * (cLon * rC + sLon * rS);
+        let zr = rSL * sLat + rCL * cLat * (cLon * rC + sLon * rS);
+
         let pxO = vec2f(120.0*xr, -120.0*yr) * u.uScale + u.uTranslate + center;
         var clipO = (pxO / u.uResolution) * 2.0 - 1.0; clipO.y = -clipO.y;
         o.pos = vec4f(clipO, 0.0, 1.0);
@@ -226,16 +238,16 @@ const PI = 3.14159265358979323846f;
 
 let pickPipeline = null;
 let pickBG_Uniforms = null;
-const pickUniformBuf = new Float32Array(16);
+const pickUniformBuf = new Float32Array(20);
 
 function ensurePickPipeline() {
     if (pickPipeline) return;
     ensureRingBuffer();
     const mod = makeShader('pick_poly', PICK_WGSL);
     const bgl = device.createBindGroupLayout({
-        entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform', hasDynamicOffset: true, minBindingSize: 48 } }],
+        entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform', hasDynamicOffset: true, minBindingSize: 80 } }],
     });
-    pickBG_Uniforms = device.createBindGroup({ layout: bgl, entries: [{ binding: 0, resource: { buffer: uniformRingBuffer, size: 48 } }] });
+    pickBG_Uniforms = device.createBindGroup({ layout: bgl, entries: [{ binding: 0, resource: { buffer: uniformRingBuffer, size: 80 } }] });
     pickPipeline = device.createRenderPipeline({
         layout: device.createPipelineLayout({ bindGroupLayouts: [bgl] }),
         vertex: {
@@ -260,6 +272,10 @@ export function drawPickingPolygons(pass, items) {
         pickUniformBuf[6] = p.uResolution[0]; pickUniformBuf[7] = p.uResolution[1];
         pickUniformBuf[8] = p.uRotate[0]; pickUniformBuf[9] = p.uRotate[1];
         pickUniformBuf[10] = p.uIsOrtho ? 1.0 : 0.0;
+        if (p.uSinCosRota) {
+            pickUniformBuf[12] = p.uSinCosRota[0]; pickUniformBuf[13] = p.uSinCosRota[1];
+            pickUniformBuf[14] = p.uSinCosRota[2]; pickUniformBuf[15] = p.uSinCosRota[3];
+        }
         const dynOffset = allocSlot(pickUniformBuf);
         pass.setBindGroup(0, pickBG_Uniforms, [dynOffset]);
         pass.setVertexBuffer(0, p.pos._gpuBuffer);
@@ -281,7 +297,7 @@ struct Uniforms {
     uIsOrtho   : f32,
     uResolution: vec2f,
     uRotate    : vec2f,
-    _pad       : vec2f,
+    uSinCosRota: vec4f,
     uColor     : vec3f,
     _pad2      : f32,
 };
@@ -304,11 +320,15 @@ const PI = 3.14159265358979323846f;
 
 fn projectGlobe(ll: vec2f, center: vec2f) -> vec3f {
     let lon = ll.x*PI/180.0; let lat = ll.y*PI/180.0;
-    let rLon = u.uRotate.x*PI/180.0; let rLat = u.uRotate.y*PI/180.0;
-    let dl = lon - rLon;
-    let x = cos(lat)*sin(dl);
-    let y = cos(rLat)*sin(lat) - sin(rLat)*cos(lat)*cos(dl);
-    let z = sin(rLat)*sin(lat) + cos(rLat)*cos(lat)*cos(dl);
+    let sLon = sin(lon); let cLon = cos(lon);
+    let sLat = sin(lat); let cLat = cos(lat);
+    let rS = u.uSinCosRota.x; let rC = u.uSinCosRota.y;
+    let rSL = u.uSinCosRota.z; let rCL = u.uSinCosRota.w;
+
+    let x = cLat * (sLon * rC - cLon * rS);
+    let y = rCL * sLat - rSL * cLat * (cLon * rC + sLon * rS);
+    let z = rSL * sLat + rCL * cLat * (cLon * rC + sLon * rS);
+    
     return vec3f(vec2f(120.0*x, -120.0*y)*u.uScale + u.uTranslate + center, z);
 }
 
@@ -372,16 +392,16 @@ const LINE_VB_LAYOUTS = [
 
 let linePipeline = null;
 let lineBG_Uniforms = null;
-const lineUniformBuf = new Float32Array(16);
+const lineUniformBuf = new Float32Array(20);
 
 function ensureLinePipeline() {
     if (linePipeline) return;
     ensureRingBuffer();
     const mod = makeShader('line', LINE_WGSL);
     const bgl = device.createBindGroupLayout({
-        entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform', hasDynamicOffset: true, minBindingSize: 64 } }],
+        entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform', hasDynamicOffset: true, minBindingSize: 80 } }],
     });
-    lineBG_Uniforms = device.createBindGroup({ layout: bgl, entries: [{ binding: 0, resource: { buffer: uniformRingBuffer, size: 64 } }] });
+    lineBG_Uniforms = device.createBindGroup({ layout: bgl, entries: [{ binding: 0, resource: { buffer: uniformRingBuffer, size: 80 } }] });
     linePipeline = device.createRenderPipeline({
         layout: device.createPipelineLayout({ bindGroupLayouts: [bgl] }),
         vertex: { module: mod, entryPoint: 'vs', buffers: LINE_VB_LAYOUTS },
@@ -402,7 +422,11 @@ export function drawThickLines(pass, items, overrideColor) {
         lineUniformBuf[4] = p.uScale; lineUniformBuf[5] = p.uIsOrtho ? 1.0 : 0.0;
         lineUniformBuf[6] = p.uResolution[0]; lineUniformBuf[7] = p.uResolution[1];
         lineUniformBuf[8] = p.uRotate[0]; lineUniformBuf[9] = p.uRotate[1];
-        lineUniformBuf[12] = finalColor[0]; lineUniformBuf[13] = finalColor[1]; lineUniformBuf[14] = finalColor[2];
+        if (p.uSinCosRota) {
+            lineUniformBuf[12] = p.uSinCosRota[0]; lineUniformBuf[13] = p.uSinCosRota[1];
+            lineUniformBuf[14] = p.uSinCosRota[2]; lineUniformBuf[15] = p.uSinCosRota[3];
+        }
+        lineUniformBuf[16] = finalColor[0]; lineUniformBuf[17] = finalColor[1]; lineUniformBuf[18] = finalColor[2];
         const dynOffset = allocSlot(lineUniformBuf);
         pass.setBindGroup(0, lineBG_Uniforms, [dynOffset]);
         pass.setVertexBuffer(0, p.lineVertexBuffer._gpuBuffer);
@@ -483,6 +507,7 @@ struct Uniforms {
     uIsOrtho      : f32, 
     uSize         : f32,
     uAtlasSize    : vec2f,
+    uSinCosRota   : vec4f,
     uColor        : vec3f,
     uHaloThick    : f32,
     uHaloColor    : vec3f, 
@@ -503,9 +528,15 @@ const PI = 3.14159265358979323846f;
     var anc: vec3f;
     if (u.uIsOrtho > 0.5) {
         let lon = u.uAnchor.x*PI/180.0; let lat = u.uAnchor.y*PI/180.0;
-        let rLon = u.uRotate.x*PI/180.0; let rLat = u.uRotate.y*PI/180.0;
-        let dl = lon - rLon;
-        let x = cos(lat)*sin(dl); let y = cos(rLat)*sin(lat)-sin(rLat)*cos(lat)*cos(dl); let z = sin(rLat)*sin(lat)+cos(rLat)*cos(lat)*cos(dl);
+        let sLon = sin(lon); let cLon = cos(lon);
+        let sLat = sin(lat); let cLat = cos(lat);
+        let rS = u.uSinCosRota.x; let rC = u.uSinCosRota.y;
+        let rSL = u.uSinCosRota.z; let rCL = u.uSinCosRota.w;
+
+        let x = cLat * (sLon * rC - cLon * rS);
+        let y = rCL * sLat - rSL * cLat * (cLon * rC + sLon * rS);
+        let z = rSL * sLat + rCL * cLat * (cLon * rC + sLon * rS);
+        
         anc = vec3f(vec2f(120.0*x, -120.0*y)*u.uScale + u.uTranslate + center, z);
     } else {
         anc = vec3f(u.uAnchor * u.uScale + u.uTranslate + center, 1.0);
@@ -555,10 +586,14 @@ export function drawTextFull(pass, items) {
         textUniformBuf[6] = p.uRotate[0]; textUniformBuf[7] = p.uRotate[1];
         textUniformBuf[8] = p.uAnchor[0]; textUniformBuf[9] = p.uAnchor[1];
         textUniformBuf[10] = p.uIsOrtho ? 1.0 : 0.0; textUniformBuf[11] = p.uSize;
-        textUniformBuf[12] = p.uAtlasSize[0]; textUniformBuf[13] = p.uAtlasSize[1];
-        textUniformBuf[16] = p.uColor[0]; textUniformBuf[17] = p.uColor[1]; textUniformBuf[18] = p.uColor[2];
-        textUniformBuf[19] = p.uHaloThick;
-        textUniformBuf[20] = p.uHaloColor[0]; textUniformBuf[21] = p.uHaloColor[1]; textUniformBuf[22] = p.uHaloColor[2];
+        textUniformBuf[16] = p.uSinCosRota ? p.uSinCosRota[0] : 0;
+        textUniformBuf[17] = p.uSinCosRota ? p.uSinCosRota[1] : 1;
+        textUniformBuf[18] = p.uSinCosRota ? p.uSinCosRota[2] : 0;
+        textUniformBuf[19] = p.uSinCosRota ? p.uSinCosRota[3] : 1;
+
+        textUniformBuf[20] = p.uColor[0]; textUniformBuf[21] = p.uColor[1]; textUniformBuf[22] = p.uColor[2];
+        textUniformBuf[23] = p.uHaloThick;
+        textUniformBuf[24] = p.uHaloColor[0]; textUniformBuf[25] = p.uHaloColor[1]; textUniformBuf[26] = p.uHaloColor[2];
 
         const dynOffset = allocSlot(textUniformBuf);
         const bgT = device.createBindGroup({ layout: textPipeline.getBindGroupLayout(1), entries: [{ binding: 0, resource: p.uFontAtlas._gpuSampler }, { binding: 1, resource: p.uFontAtlas._gpuView }] });
@@ -578,7 +613,7 @@ struct Uniforms {
     uIsOrtho      : f32,
     uResolution   : vec2f,
     uRotate       : vec2f,
-    _pad0         : vec2f,
+    uSinCosRota   : vec4f,
     uColor        : vec3f,
     _pad1         : f32,
 };
@@ -596,12 +631,15 @@ fn project(p: vec2f) -> vec3f {
     if (u.uIsOrtho > 0.5) {
         let lon = p.x * PI / 180.0;
         let lat = p.y * PI / 180.0;
-        let rLon = u.uRotate.x * PI / 180.0;
-        let rLat = u.uRotate.y * PI / 180.0;
-        let dl = lon - rLon;
-        let x = cos(lat) * sin(dl);
-        let yr = cos(rLat) * sin(lat) - sin(rLat) * cos(lat) * cos(dl);
-        let zr = sin(rLat) * sin(lat) + cos(rLat) * cos(lat) * cos(dl);
+        let sLon = sin(lon); let cLon = cos(lon);
+        let sLat = sin(lat); let cLat = cos(lat);
+        let rS = u.uSinCosRota.x; let rC = u.uSinCosRota.y;
+        let rSL = u.uSinCosRota.z; let rCL = u.uSinCosRota.w;
+
+        let x = cLat * (sLon * rC - cLon * rS);
+        let yr = rCL * sLat - rSL * cLat * (cLon * rC + sLon * rS);
+        let zr = rSL * sLat + rCL * cLat * (cLon * rC + sLon * rS);
+
         let pxO = vec2f(x * 120.0, -yr * 120.0) * u.uScale + u.uTranslate + center;
         return vec3f(pxO, zr);
     } else {
@@ -703,7 +741,7 @@ export function drawFastLines(pass, lineItems, overrideColor) {
     pass.setPipeline(fastLinePipeline);
 
     for (const p of lineItems) {
-        const uBuf = new Float32Array(16);
+        const uBuf = new Float32Array(20);
         uBuf[0] = p.uOpacity ?? 1.0;
         uBuf[1] = p.uThickness ?? 1.0;
         uBuf[2] = p.uTranslate[0]; uBuf[3] = p.uTranslate[1];
@@ -712,8 +750,13 @@ export function drawFastLines(pass, lineItems, overrideColor) {
         uBuf[6] = p.uResolution[0]; uBuf[7] = p.uResolution[1];
         uBuf[8] = (p.uRotate ? p.uRotate[0] : 0); uBuf[9] = (p.uRotate ? p.uRotate[1] : 0);
 
+        if (p.uSinCosRota) {
+            uBuf[12] = p.uSinCosRota[0]; uBuf[13] = p.uSinCosRota[1];
+            uBuf[14] = p.uSinCosRota[2]; uBuf[15] = p.uSinCosRota[3];
+        }
+
         const col = overrideColor || p.uColor || [1, 1, 1];
-        uBuf[12] = col[0]; uBuf[13] = col[1]; uBuf[14] = col[2];
+        uBuf[16] = col[0]; uBuf[17] = col[1]; uBuf[18] = col[2];
 
         const dynOffset = allocSlot(uBuf);
         pass.setBindGroup(0, polyBG_Uniforms, [dynOffset]);

@@ -23,6 +23,7 @@ export function stopAutoRotation() {
 function animateAutoRotation() {
     if (!isAutoRotating) return;
     orthoRotate[0] -= 0.5;
+    if (orthoRotate[0] < -180) orthoRotate[0] += 360;
     requestRedraw();
     autoRotationRequestId = requestAnimationFrame(animateAutoRotation);
 }
@@ -75,6 +76,8 @@ function dragged(event) {
         const sensBase = (180 / Math.PI) / 120; // 0.47746... pour un rayon de 120px
         const sens = sensBase / (zoomState.k * Math.max(0.1, Math.cos(latRad)));
         orthoRotate[0] -= event.dx * sens;
+        while (orthoRotate[0] > 180) orthoRotate[0] -= 360;
+        while (orthoRotate[0] < -180) orthoRotate[0] += 360;
         orthoRotate[1] = Math.max(-90, Math.min(90, orthoRotate[1] + event.dy * (sensBase / zoomState.k)));
         requestRedraw();
     } else {

@@ -92,10 +92,18 @@ export function createRenderer(deps) {
             const showLabels = appState.get('showLabels');
             const showColors = appState.get('showColors');
 
+            const rLonRad = orthoRotate[0] * Math.PI / 180;
+            const rLatRad = orthoRotate[1] * Math.PI / 180;
+            const uSinCosRota = [
+                Math.sin(rLonRad), Math.cos(rLonRad),
+                Math.sin(rLatRad), Math.cos(rLatRad)
+            ];
+
             const baseProps = {
                 uTranslate, uScale,
                 uResolution: [width, height],
                 uRotate: orthoRotate,
+                uSinCosRota,
                 uIsOrtho: isOrthographic,
                 uOpacity: 1.0
             };
@@ -231,6 +239,12 @@ export function createRenderer(deps) {
                         uTranslate, uScale,
                         uResolution: [width, height],
                         uRotate: orthoRotate,
+                        uSinCosRota: [
+                            Math.sin(orthoRotate[0] * Math.PI / 180),
+                            Math.cos(orthoRotate[0] * Math.PI / 180),
+                            Math.sin(orthoRotate[1] * Math.PI / 180),
+                            Math.cos(orthoRotate[1] * Math.PI / 180)
+                        ],
                         uIsOrtho: isOrthographic
                     });
                 }
