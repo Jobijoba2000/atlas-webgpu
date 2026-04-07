@@ -60,7 +60,11 @@ function getEdgesGlobal(rings, vm, projFunc, clampLat = 89.9) {
         for (let j = 0; j < ring.length - 1; j++) {
             const pt1 = ring[j], pt2 = ring[j + 1];
             const dLon = Math.abs(pt1[0] - pt2[0]);
-            if (dLon > 180) {
+            const EPS = 0.01; 
+            const isVertical = Math.abs(pt1[0] - pt2[0]) < 1e-4;
+            const isLonEdge = isVertical && (Math.abs(Math.abs(pt1[0]) - 180) < EPS);
+
+            if (dLon > 180 || isLonEdge) {
                 currentPath.push([pt1[0], Math.max(-clampLat, Math.min(clampLat, pt1[1]))]);
                 if (currentPath.length > 1) paths.push(currentPath);
                 currentPath = [];
