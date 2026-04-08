@@ -82,7 +82,7 @@ export function createRenderer(deps) {
             const uTranslate = [zoomState.x, zoomState.y];
             const uScale = zoomState.k;
             const outlineColor = parseHexColor(appState.get('outlineColor'));
-            const dynamicThickness = 1.0 * Math.pow(Math.min(zoomState.k, 200000), 0.256);
+            const dynamicThickness = 1.0 * Math.pow(Math.min(zoomState.k, 200000), 0.222);
             const gratThickness = 1.2 * Math.pow(Math.min(zoomState.k, 150), 0.23);
 
             const loadedRegions = getLoadedRegions();

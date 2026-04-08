@@ -89,7 +89,7 @@ function getEdgesGlobal(rings, vm, projFunc, clampLat = 89.9) {
             const pt2_raw = ring[j + 1];
             const dLon = Math.abs(pt1_raw[0] - pt2_raw[0]);
             const EPS = 0.01; 
-            const isVertical = Math.abs(pt1_raw[0] - pt2_raw[0]) < 1e-4;
+            const isVertical = Math.abs(pt1_raw[0] - pt2_raw[0]) < 0.01;
             const isLonEdge = isVertical && (Math.abs(Math.abs(pt1_raw[0]) - 180) < EPS);
 
             if (dLon > 180 || isLonEdge) {
